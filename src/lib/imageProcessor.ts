@@ -12,8 +12,13 @@ export class ImageProcessor {
   }
 
   private async getSharp() {
-    const sharp = await import('sharp');
-    return sharp.default;
+    try {
+      const sharpModule = await import('sharp');
+      return sharpModule.default || sharpModule;
+    } catch (error) {
+      console.error('Failed to load Sharp:', error);
+      throw new Error('Sharp module could not be loaded. Image processing is not available.');
+    }
   }
 
   async processImage(
