@@ -396,23 +396,6 @@ npx tsc --noEmit
 
 This project is private and proprietary. All rights reserved.
 
-## 🤝 Contributing
-
-This is a private project. For internal development:
-
-1. Create a feature branch
-2. Make your changes
-3. Test thoroughly
-4. Submit a pull request
-
-## 📞 Support
-
-For issues and questions:
-
-1. Check the troubleshooting section above
-2. Review the GitHub issues
-3. Contact the development team
-
 ---
 
 **Note**: This application requires a Google Gemini API key for AI-powered features. Fallback methods will be used if the API is unavailable.
