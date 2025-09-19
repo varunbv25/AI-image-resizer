@@ -5,12 +5,16 @@ import { SUPPORTED_FORMATS, MAX_FILE_SIZE } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('Upload API called');
+
     const formData = await req.formData();
     const file = formData.get('image') as File;
 
     if (!file) {
       throw new Error('No image file provided');
     }
+
+    console.log('File received:', file.name, file.type, file.size);
 
     // Validate file type
     if (!SUPPORTED_FORMATS.includes(file.type)) {
@@ -23,12 +27,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Convert file to buffer
+    console.log('Converting file to buffer...');
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    console.log('Buffer created, size:', buffer.length);
 
-    // Get image dimensions
+    // Get image dimensions with error handling
+    console.log('Creating ImageProcessor...');
     const processor = new ImageProcessor(process.env.GEMINI_API_KEY);
+
+    console.log('Getting image dimensions...');
     const originalDimensions = await processor.getImageDimensions(buffer);
+    console.log('Dimensions obtained:', originalDimensions);
 
     // Return image info for preview
     const response: APIResponse = {
@@ -43,9 +53,12 @@ export async function POST(req: NextRequest) {
       },
     };
 
+    console.log('Upload successful, returning response');
     return NextResponse.json(response);
   } catch (error) {
     console.error('Upload error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+
     const response: APIResponse = {
       success: false,
       error: error instanceof Error ? error.message : 'Upload failed',
