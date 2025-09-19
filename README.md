@@ -392,6 +392,11 @@ npx tsc --noEmit
    - Check Node.js version (requires 18+)
    - Clear `.next` folder and rebuild
 
+5. **Sharp Module Loading Error**
+   - Run `npm install --include=optional sharp`
+   - Rebuild Sharp: `npm rebuild sharp`
+   - For platform-specific issues, try: `npm install --os=win32 --cpu=x64 sharp`
+
 ## 📝 License
 
 This project is private and proprietary. All rights reserved.
