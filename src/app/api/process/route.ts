@@ -1,0 +1,109 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { ImageProcessor } from '@/lib/imageProcessor';
+import { FileHandler } from '@/lib/fileHandler';
+import { APIResponse, ImageDimensions, ImageProcessingOptions, ExtensionStrategy } from '@/types';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const {
+      imageData,
+      targetDimensions,
+      quality = 80,
+      format = 'jpeg',
+      strategy = { type: 'ai' },
+    }: {
+      imageData: string;
+      targetDimensions: ImageDimensions;
+      quality?: number;
+      format?: 'jpeg' | 'png' | 'webp';
+      strategy?: ExtensionStrategy;
+    } = body;
+
+    if (!imageData || !targetDimensions) {
+      throw new Error('Missing required parameters');
+    }
+
+    // Convert base64 back to buffer
+    const imageBuffer = Buffer.from(imageData, 'base64');
+
+    // Get original dimensions
+    const processor = new ImageProcessor(process.env.GOOGLE_AI_API_KEY || 'AIzaSyCRTkZUzzC3tBlb9lNmZTmgKz2l_HZRbpw');
+    const originalDimensions = await processor.getImageDimensions(imageBuffer);
+
+    // Process the image
+    const options: ImageProcessingOptions = {
+      targetDimensions,
+      quality,
+      format,
+    };
+
+    const processedImage = await processor.processImage(
+      imageBuffer,
+      originalDimensions,
+      targetDimensions,
+      options,
+      strategy
+    );
+
+    // Return processed image
+    const response: APIResponse = {
+      success: true,
+      data: {
+        imageData: processedImage.buffer.toString('base64'),
+        metadata: processedImage.metadata,
+        filename: FileHandler.generateFileName('image', 'resized'),
+      },
+    };
+
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Processing error:', error);
+
+    // Try fallback strategy if AI processing failed
+    if (error instanceof Error && error.message.includes('AI')) {
+      try {
+        const body = await req.json();
+        const { imageData, targetDimensions, quality = 80, format = 'jpeg' } = body;
+
+        const imageBuffer = Buffer.from(imageData, 'base64');
+        const processor = new ImageProcessor(); // No API key for fallback - uses crop only
+        const originalDimensions = await processor.getImageDimensions(imageBuffer);
+
+        const options: ImageProcessingOptions = {
+          targetDimensions,
+          quality,
+          format,
+        };
+
+        const processedImage = await processor.processImage(
+          imageBuffer,
+          originalDimensions,
+          targetDimensions,
+          options,
+          { type: 'edge-extend' } // Fallback strategy
+        );
+
+        const response: APIResponse = {
+          success: true,
+          data: {
+            imageData: processedImage.buffer.toString('base64'),
+            metadata: processedImage.metadata,
+            filename: FileHandler.generateFileName('image', 'resized'),
+            fallbackUsed: true,
+          },
+        };
+
+        return NextResponse.json(response);
+      } catch (fallbackError) {
+        console.error('Fallback processing error:', fallbackError);
+      }
+    }
+
+    const response: APIResponse = {
+      success: false,
+      error: error instanceof Error ? error.message : 'Processing failed',
+    };
+    return NextResponse.json(response, { status: 500 });
+  }
+}
