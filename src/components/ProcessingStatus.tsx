@@ -1,6 +1,5 @@
 'use client';
 
-import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { ProcessingStatus as ProcessingStatusType } from '@/types';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
@@ -25,16 +24,6 @@ export function ProcessingStatus({ status }: ProcessingStatusProps) {
     }
   };
 
-  const getColor = () => {
-    switch (status.stage) {
-      case 'completed':
-        return 'bg-green-600';
-      case 'error':
-        return 'bg-red-600';
-      default:
-        return 'bg-blue-600';
-    }
-  };
 
   return (
     <Card>

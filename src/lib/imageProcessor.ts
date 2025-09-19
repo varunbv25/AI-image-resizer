@@ -13,24 +13,8 @@ export class ImageProcessor {
 
   private async getSharp() {
     try {
-      // Try multiple ways to import Sharp for better Vercel compatibility
-      let sharp;
-
-      try {
-        // First try: standard dynamic import
-        const sharpModule = await import('sharp');
-        sharp = sharpModule.default || sharpModule;
-      } catch (importError) {
-        console.warn('Standard Sharp import failed, trying alternative:', importError);
-
-        // Second try: require for Vercel edge cases
-        try {
-          sharp = require('sharp');
-        } catch (requireError) {
-          console.warn('Sharp require failed:', requireError);
-          throw new Error('Sharp module could not be loaded through any method');
-        }
-      }
+      const sharpModule = await import('sharp');
+      const sharp = sharpModule.default || sharpModule;
 
       // Verify Sharp is actually callable
       if (typeof sharp !== 'function') {
