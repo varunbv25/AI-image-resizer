@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 import { GoogleGenAI } from '@google/genai';
 import * as fs from 'node:fs';
 import * as path from 'path';
@@ -12,6 +11,11 @@ export class ImageProcessor {
     this.apiKey = geminiApiKey;
   }
 
+  private async getSharp() {
+    const sharp = await import('sharp');
+    return sharp.default;
+  }
+
   async processImage(
     imageBuffer: Buffer,
     originalDimensions: ImageDimensions,
@@ -20,6 +24,7 @@ export class ImageProcessor {
     strategy: ExtensionStrategy = { type: 'ai' }
   ): Promise<ProcessedImage> {
     try {
+      const sharp = await this.getSharp();
       let processedBuffer: Buffer;
 
       if (strategy.type === 'ai' && this.apiKey) {
@@ -99,6 +104,8 @@ export class ImageProcessor {
     if (!this.apiKey) {
       throw new Error('Google AI API key not configured');
     }
+
+    const sharp = await this.getSharp();
 
     // Create temporary file for input image
     const tempDir = os.tmpdir();
@@ -186,6 +193,8 @@ export class ImageProcessor {
     originalDimensions: ImageDimensions,
     targetDimensions: ImageDimensions
   ): Promise<Buffer> {
+    const sharp = await this.getSharp();
+
     // Detect edge color from the original image
     const edgeColor = await this.detectDominantEdgeColor(imageBuffer);
 
@@ -210,9 +219,9 @@ export class ImageProcessor {
       .toBuffer();
   }
 
-
   private async detectDominantEdgeColor(imageBuffer: Buffer): Promise<{ r: number; g: number; b: number }> {
     try {
+      const sharp = await this.getSharp();
       const image = sharp(imageBuffer);
       const metadata = await image.metadata();
       const width = metadata.width || 0;
@@ -324,6 +333,7 @@ export class ImageProcessor {
     imageBuffer: Buffer,
     targetDimensions: ImageDimensions
   ): Promise<Buffer> {
+    const sharp = await this.getSharp();
     const metadata = await sharp(imageBuffer).metadata();
     const originalWidth = metadata.width || 0;
     const originalHeight = metadata.height || 0;
@@ -356,6 +366,8 @@ export class ImageProcessor {
 
   private async areImagesDifferent(originalBuffer: Buffer, processedBuffer: Buffer): Promise<boolean> {
     try {
+      const sharp = await this.getSharp();
+
       // Quick size check first
       if (originalBuffer.length !== processedBuffer.length) {
         return true;
@@ -394,11 +406,11 @@ export class ImageProcessor {
     }
   }
 
-
   private async optimizeForWeb(
     imageBuffer: Buffer,
     options: ImageProcessingOptions
   ): Promise<Buffer> {
+    const sharp = await this.getSharp();
     const sharpInstance = sharp(imageBuffer);
 
     switch (options.format) {
@@ -413,8 +425,8 @@ export class ImageProcessor {
     }
   }
 
-
   async getImageDimensions(imageBuffer: Buffer): Promise<ImageDimensions> {
+    const sharp = await this.getSharp();
     const metadata = await sharp(imageBuffer).metadata();
     return {
       width: metadata.width || 0,
