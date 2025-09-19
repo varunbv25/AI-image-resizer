@@ -9,12 +9,10 @@ const nextConfig = {
     }
     return config;
   },
-  experimental: {
-    turbo: {
-      rules: {
-        'sharp': {
-          loaders: ['external'],
-        },
+  turbopack: {
+    rules: {
+      'sharp': {
+        loaders: ['external'],
       },
     },
   },
