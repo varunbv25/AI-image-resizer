@@ -3,19 +3,9 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals.push('sharp');
-    }
-    return config;
-  },
-  turbopack: {
-    rules: {
-      'sharp': {
-        loaders: ['external'],
-      },
-    },
-  },
+  experimental: {
+    serverComponentsExternalPackages: ['sharp']
+  }
 };
 
 module.exports = nextConfig;
