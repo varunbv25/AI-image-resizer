@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { ImageDimensions, ProcessingStatus, APIResponse } from '@/types';
+import { ImageDimensions, APIResponse, ProcessingStatus } from '@/types';
 
-interface ProcessedImageData {
+interface UpscaledImageData {
   imageData: string;
   metadata: {
     width: number;
@@ -12,19 +12,19 @@ interface ProcessedImageData {
     size: number;
   };
   filename: string;
-  fallbackUsed?: boolean;
 }
 
-export function useImageProcessing() {
+
+export function useUpscaling() {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processedImage, setProcessedImage] = useState<ProcessedImageData | null>(null);
+  const [upscaledImage, setUpscaledImage] = useState<UpscaledImageData | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>({
     stage: 'idle',
     progress: 0,
     message: '',
   });
 
-  const processImage = useCallback(
+  const upscaleImage = useCallback(
     async (
       imageData: string,
       targetDimensions: ImageDimensions,
@@ -34,21 +34,21 @@ export function useImageProcessing() {
       } = {}
     ) => {
       setIsProcessing(true);
-      setProcessedImage(null);
+      setUpscaledImage(null);
       setStatus({
         stage: 'analyzing',
-        progress: 10,
-        message: 'Analyzing image requirements...',
+        progress: 20,
+        message: 'Upscaling image...',
       });
 
       try {
         setStatus({
           stage: 'extending',
-          progress: 30,
-          message: 'Processing image...',
+          progress: 60,
+          message: 'Applying high-quality scaling...',
         });
 
-        const response = await fetch('/api/process', {
+        const response = await fetch('/api/upscale', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -58,38 +58,28 @@ export function useImageProcessing() {
             targetDimensions,
             quality: options.quality || 80,
             format: options.format || 'jpeg',
-            strategy: { type: 'ai' },
           }),
         });
 
-        const result: APIResponse<ProcessedImageData> = await response.json();
+        const result: APIResponse<UpscaledImageData> = await response.json();
 
         if (!result.success) {
-          throw new Error(result.error || 'Processing failed');
+          throw new Error(result.error || 'Upscaling failed');
         }
-
-        setStatus({
-          stage: 'optimizing',
-          progress: 80,
-          message: 'Optimizing for web...',
-        });
-
-        // Simulate optimization delay
-        await new Promise(resolve => setTimeout(resolve, 500));
 
         setStatus({
           stage: 'completed',
           progress: 100,
-          message: 'Processing completed successfully!',
+          message: 'Upscaling completed successfully!',
         });
 
-        setProcessedImage(result.data!);
+        setUpscaledImage(result.data!);
       } catch (error) {
-        console.error('Processing error:', error);
+        console.error('Upscaling error:', error);
         setStatus({
           stage: 'error',
           progress: 0,
-          message: error instanceof Error ? error.message : 'Processing failed',
+          message: error instanceof Error ? error.message : 'Upscaling failed',
         });
       } finally {
         setIsProcessing(false);
@@ -99,19 +89,19 @@ export function useImageProcessing() {
   );
 
   const downloadImage = useCallback((filename?: string) => {
-    if (!processedImage) return;
+    if (!upscaledImage) return;
 
     const link = document.createElement('a');
-    link.href = `data:image/${processedImage.metadata.format};base64,${processedImage.imageData}`;
-    link.download = filename || processedImage.filename || 'resized-image.jpg';
+    link.href = `data:image/${upscaledImage.metadata.format};base64,${upscaledImage.imageData}`;
+    link.download = filename || upscaledImage.filename || 'upscaled-image.jpg';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, [processedImage]);
+  }, [upscaledImage]);
 
   const reset = useCallback(() => {
     setIsProcessing(false);
-    setProcessedImage(null);
+    setUpscaledImage(null);
     setStatus({
       stage: 'idle',
       progress: 0,
@@ -121,9 +111,9 @@ export function useImageProcessing() {
 
   return {
     isProcessing,
-    processedImage,
+    upscaledImage,
     status,
-    processImage,
+    upscaleImage,
     downloadImage,
     reset,
   };

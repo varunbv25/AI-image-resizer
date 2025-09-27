@@ -142,7 +142,7 @@ export class ImageProcessor {
       // Create prompt for nano banana model
       const prompt = [
         {
-          text: `Extend this image to ${targetDimensions.width}x${targetDimensions.height} pixels so that the background continues seamlessly. Ensure the new areas match the original style, colors, lighting, and textures, without any visible separation or border between the original image and the extended background.`
+          text: `Extend this image to ${targetDimensions.width}x${targetDimensions.height} pixels so that the background continues seamlessly. Ensure the new areas match the original style, colors, lighting, and textures, without any visible separation or border between the original image and the extended background and do not crop the image to these dimensions.`
         },
         {
           inlineData: {
@@ -207,28 +207,53 @@ export class ImageProcessor {
   ): Promise<Buffer> {
     const sharp = await this.getSharp();
 
+    // If target dimensions are smaller than original, crop instead of extend
+    if (targetDimensions.width <= originalDimensions.width &&
+        targetDimensions.height <= originalDimensions.height) {
+      return await this.cropToExactDimensions(imageBuffer, targetDimensions);
+    }
+
     // Detect edge color from the original image
     const edgeColor = await this.detectDominantEdgeColor(imageBuffer);
+
+    // Get actual dimensions from the image buffer to ensure consistency
+    const actualMetadata = await sharp(imageBuffer).metadata();
+    const actualWidth = actualMetadata.width || originalDimensions.width;
+    const actualHeight = actualMetadata.height || originalDimensions.height;
+
+    // Ensure target dimensions are larger than actual dimensions
+    const finalTargetWidth = Math.max(targetDimensions.width, actualWidth);
+    const finalTargetHeight = Math.max(targetDimensions.height, actualHeight);
 
     // Create canvas with detected edge color extending to target dimensions
     const canvas = sharp({
       create: {
-        width: targetDimensions.width,
-        height: targetDimensions.height,
+        width: finalTargetWidth,
+        height: finalTargetHeight,
         channels: 3,
         background: edgeColor,
       },
     });
 
     // Calculate positioning to center the original image
-    const left = Math.max(0, Math.floor((targetDimensions.width - originalDimensions.width) / 2));
-    const top = Math.max(0, Math.floor((targetDimensions.height - originalDimensions.height) / 2));
+    const left = Math.max(0, Math.floor((finalTargetWidth - actualWidth) / 2));
+    const top = Math.max(0, Math.floor((finalTargetHeight - actualHeight) / 2));
 
-    // Place the original image onto the extended background
-    return await canvas
+    // Resize the composite to exact target dimensions if needed
+    let result = await canvas
       .composite([{ input: imageBuffer, left, top }])
       .jpeg({ quality: 90 })
       .toBuffer();
+
+    // If we had to make the canvas larger than requested, resize to exact target
+    if (finalTargetWidth !== targetDimensions.width || finalTargetHeight !== targetDimensions.height) {
+      result = await sharp(result)
+        .resize(targetDimensions.width, targetDimensions.height, { fit: 'fill' })
+        .jpeg({ quality: 90 })
+        .toBuffer();
+    }
+
+    return result;
   }
 
   private async detectDominantEdgeColor(imageBuffer: Buffer): Promise<{ r: number; g: number; b: number }> {

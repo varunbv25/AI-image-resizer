@@ -3,202 +3,152 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ImageUploader } from '@/components/ImageUploader';
-import { DimensionSelector } from '@/components/DimensionSelector';
-import { ImagePreview } from '@/components/ImagePreview';
-import { ProcessingStatus } from '@/components/ProcessingStatus';
-import { useFileUpload } from '@/hooks/useFileUpload';
-import { useImageProcessing } from '@/hooks/useImageProcessing';
-import { ImageDimensions } from '@/types';
-import { Download, RotateCcw } from 'lucide-react';
+import { Scissors, Bot, Maximize, ArrowLeft } from 'lucide-react';
+import { AIImageResizing } from '@/components/modes/AIImageResizing';
+import { ManualCropping } from '@/components/modes/ManualCropping';
+import { Upscaling } from '@/components/modes/Upscaling';
+
+type Mode = 'home' | 'ai-crop' | 'manual-crop' | 'upscaling';
 
 export default function Home() {
-  const [targetDimensions, setTargetDimensions] = useState<ImageDimensions>({
-    width: 1080,
-    height: 1920,
-  });
+  const [currentMode, setCurrentMode] = useState<Mode>('home');
 
-  const {
-    isUploading,
-    uploadedImage,
-    error: uploadError,
-    uploadFile,
-    reset: resetUpload,
-  } = useFileUpload();
-
-  const {
-    isProcessing,
-    processedImage,
-    status,
-    processImage,
-    downloadImage,
-    reset: resetProcessing,
-  } = useImageProcessing();
-
-  const handleImageUpload = (file: File) => {
-    uploadFile(file);
-    resetProcessing();
+  const renderModeContent = () => {
+    switch (currentMode) {
+      case 'ai-crop':
+        return <AIImageResizing onBack={() => setCurrentMode('home')} />;
+      case 'manual-crop':
+        return <ManualCropping onBack={() => setCurrentMode('home')} />;
+      case 'upscaling':
+        return <Upscaling onBack={() => setCurrentMode('home')} />;
+      default:
+        return renderHomePage();
+    }
   };
 
-  const handleProcess = () => {
-    if (!uploadedImage) return;
-
-    processImage(uploadedImage.imageData, targetDimensions);
-  };
-
-  const handleReset = () => {
-    resetUpload();
-    resetProcessing();
-  };
-
-  const handleDimensionsChange = (dimensions: ImageDimensions) => {
-    setTargetDimensions(dimensions);
-    resetProcessing();
-  };
-
-  return (
+  const renderHomePage = () => (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            AI-Powered Image Resizer
+        <header className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+            AI Image Processing Suite
           </h1>
-          <p className="text-lg text-gray-600">
-            Intelligently resize and extend images with AI-powered canvas extension
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Choose from AI-powered smart cropping, manual precision cropping, or advanced upscaling
           </p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Half - Controls and Dimensions */}
-          <div className="space-y-6">
-            {!uploadedImage ? (
-              <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    Image Uploaded
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleReset}
-                    >
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Reset
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600">
-                    {uploadedImage.filename}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height} •{' '}
-                    {Math.round(uploadedImage.size / 1024)} KB
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {uploadError && (
-              <Card className="border-red-200">
-                <CardContent className="pt-6">
-                  <p className="text-red-600 text-sm">{uploadError}</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {uploadedImage && (
-              <DimensionSelector
-                originalDimensions={uploadedImage.originalDimensions}
-                targetDimensions={targetDimensions}
-                onDimensionsChange={handleDimensionsChange}
-              />
-            )}
-
-            {uploadedImage && (
-              <>
-                <Button
-                  onClick={handleProcess}
-                  disabled={isProcessing}
-                  className="w-full bg-black hover:bg-gray-800 text-white"
-                  size="lg"
-                >
-                  {isProcessing ? 'Processing...' : 'Resize Image'}
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* AI Smart Crop */}
+            <Card className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-blue-300"
+                  onClick={() => setCurrentMode('ai-crop')}>
+              <CardHeader className="text-center pb-4">
+                <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                  <Bot className="w-8 h-8 text-blue-600" />
+                </div>
+                <CardTitle className="text-xl font-bold text-gray-900">
+                  AI Image Resizing
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center">
+                <p className="text-gray-600 mb-4">
+                  Intelligently resize and extend images using AI-powered algorithms with edge detection fallback
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1 mb-6">
+                  <li>• AI-powered content-aware resizing</li>
+                  <li>• Automatic canvas extension</li>
+                  <li>• Edge detection fallback</li>
+                  <li>• Optimal compression</li>
+                </ul>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                  Start AI Image Resizing
                 </Button>
+              </CardContent>
+            </Card>
 
-                {processedImage && (
-                  <Button
-                    variant="outline"
-                    onClick={() => downloadImage()}
-                    className="w-full flex items-center justify-center gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
+            {/* Manual Cropping */}
+            <Card className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-green-300"
+                  onClick={() => setCurrentMode('manual-crop')}>
+              <CardHeader className="text-center pb-4">
+                <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                  <Scissors className="w-8 h-8 text-green-600" />
+                </div>
+                <CardTitle className="text-xl font-bold text-gray-900">
+                  Manual Cropping
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center">
+                <p className="text-gray-600 mb-4">
+                  Precise manual control with drag-and-zoom functionality for perfect cropping
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1 mb-6">
+                  <li>• Drag and resize image within frame</li>
+                  <li>• Zoom controls for precision</li>
+                  <li>• Real-time preview</li>
+                  <li>• Optimal compression</li>
+                </ul>
+                <Button className="w-full bg-green-600 hover:bg-green-700">
+                  Start Manual Cropping
+                </Button>
+              </CardContent>
+            </Card>
 
-          {/* Right Half - Preview */}
-          <div className="space-y-4">
-            <ImagePreview
-              originalImage={uploadedImage?.imageData}
-              processedImage={processedImage?.imageData}
-              originalDimensions={uploadedImage?.originalDimensions}
-              targetDimensions={targetDimensions}
-              isProcessing={isProcessing}
-            />
-
-            {/* Progress Bar under preview - separate component */}
-            {(isProcessing || status.stage !== 'idle') && (
-              <ProcessingStatus
-                status={isProcessing && status.stage === 'idle'
-                  ? { stage: 'analyzing', progress: 10, message: 'Processing image...' }
-                  : status
-                }
-              />
-            )}
+            {/* Upscaling */}
+            <Card className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-purple-300"
+                  onClick={() => setCurrentMode('upscaling')}>
+              <CardHeader className="text-center pb-4">
+                <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-full flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                  <Maximize className="w-8 h-8 text-purple-600" />
+                </div>
+                <CardTitle className="text-xl font-bold text-gray-900">
+                  Upscaling
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center">
+                <p className="text-gray-600 mb-4">
+                  Enhance and upscale images to higher resolutions with quality preservation
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1 mb-6">
+                  <li>• Scale factor or target resolution</li>
+                  <li>• Quality preservation</li>
+                  <li>• Batch processing support</li>
+                  <li>• Optimal compression</li>
+                </ul>
+                <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                  Start Upscaling
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        {/* Bottom Section - Result Details */}
-        {processedImage && (
-          <div className="mt-8">
-            <div className="max-w-md mx-auto">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Result Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Dimensions:</span>
-                    <span>{processedImage.metadata.width} × {processedImage.metadata.height}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Format:</span>
-                    <span className="uppercase">{processedImage.metadata.format}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>File Size:</span>
-                    <span>{Math.round(processedImage.metadata.size / 1024)} KB</span>
-                  </div>
-                  {processedImage.fallbackUsed && (
-                    <div className="mt-3 p-2 bg-amber-50 rounded text-xs text-amber-700">
-                      AI processing unavailable - used fallback method
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        <footer className="text-center mt-12 text-gray-500 text-sm">
-          <p>Upload images up to 10MB in JPEG, PNG, or WebP format</p>
+        <footer className="text-center mt-16 text-gray-500 text-sm">
+          <p>No file upload limits • Support for JPEG, PNG, WebP, and more</p>
         </footer>
       </div>
+    </div>
+  );
+
+  if (currentMode === 'home') {
+    return renderHomePage();
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4">
+          <Button
+            variant="ghost"
+            onClick={() => setCurrentMode('home')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Button>
+        </div>
+      </div>
+      {renderModeContent()}
     </div>
   );
 }

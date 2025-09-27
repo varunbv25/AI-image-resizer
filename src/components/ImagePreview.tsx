@@ -69,7 +69,7 @@ export function ImagePreview({
               {isProcessing ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-                  <p className="text-gray-600 text-sm text-center">AI Extension...</p>
+                  <p className="text-gray-600 text-sm text-center">Processing...</p>
                 </div>
               ) : processedImage ? (
                 <Image

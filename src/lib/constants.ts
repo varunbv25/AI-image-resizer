@@ -9,7 +9,13 @@ export const ASPECT_RATIOS: AspectRatio[] = [
   { ratio: '3:2', width: 3, height: 2, label: 'Landscape' },
 ];
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-export const SUPPORTED_FORMATS = ['image/jpeg', 'image/png', 'image/webp'];
+export const SUPPORTED_FORMATS = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+];
 
-export const PROCESSING_TIMEOUT = 30000; // 30 seconds
+export const PROCESSING_TIMEOUT = 60000; // 60 seconds
+
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB

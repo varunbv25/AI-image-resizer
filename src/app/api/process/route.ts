@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ImageProcessor } from '@/lib/imageProcessor';
 import { FileHandler } from '@/lib/fileHandler';
+import { createCloudConvertService } from '@/lib/cloudConvert';
 import { APIResponse, ImageDimensions, ImageProcessingOptions, ExtensionStrategy } from '@/types';
 
 export async function POST(req: NextRequest) {
@@ -46,13 +47,44 @@ export async function POST(req: NextRequest) {
       strategy
     );
 
+    // Compress the processed image for optimal web use
+    let finalImageBuffer = processedImage.buffer;
+    let fallbackUsed = false;
+
+    try {
+      if (process.env.CLOUDCONVERT_API_KEY) {
+        const cloudConvert = createCloudConvertService(process.env.CLOUDCONVERT_API_KEY);
+        const optimalSettings = await cloudConvert.getOptimalWebSettings(
+          processedImage.buffer.length,
+          processedImage.metadata.format || 'jpeg'
+        );
+
+        finalImageBuffer = await cloudConvert.compressImage(
+          processedImage.buffer,
+          'processed-image.jpg',
+          {
+            quality: optimalSettings.quality,
+            format: 'jpg',
+            optimize: true,
+          }
+        );
+      }
+    } catch (compressionError) {
+      console.warn('CloudConvert compression failed, using original:', compressionError);
+      fallbackUsed = true;
+    }
+
     // Return processed image
     const response: APIResponse = {
       success: true,
       data: {
-        imageData: processedImage.buffer.toString('base64'),
-        metadata: processedImage.metadata,
+        imageData: finalImageBuffer.toString('base64'),
+        metadata: {
+          ...processedImage.metadata,
+          size: finalImageBuffer.length,
+        },
         filename: FileHandler.generateFileName('image', 'resized'),
+        ...(fallbackUsed && { fallbackUsed }),
       },
     };
 

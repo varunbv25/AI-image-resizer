@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ImageProcessor } from '@/lib/imageProcessor';
 import { APIResponse } from '@/types';
-import { SUPPORTED_FORMATS, MAX_FILE_SIZE } from '@/lib/constants';
+import { SUPPORTED_FORMATS } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,10 +21,7 @@ export async function POST(req: NextRequest) {
       throw new Error(`Unsupported file format: ${file.type}`);
     }
 
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File size too large: ${Math.round(file.size / 1024 / 1024)}MB (max: ${MAX_FILE_SIZE / 1024 / 1024}MB)`);
-    }
+    // No file size limit - support large files
 
     // Convert file to buffer
     console.log('Converting file to buffer...');

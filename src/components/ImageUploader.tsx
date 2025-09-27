@@ -5,7 +5,6 @@ import { useDropzone } from 'react-dropzone';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, Image as ImageIcon } from 'lucide-react';
-import { MAX_FILE_SIZE } from '@/lib/constants';
 
 interface ImageUploaderProps {
   onImageUpload: (file: File) => void;
@@ -30,7 +29,6 @@ export function ImageUploader({ onImageUpload, isUploading }: ImageUploaderProps
       'image/png': ['.png'],
       'image/webp': ['.webp'],
     },
-    maxSize: MAX_FILE_SIZE,
     multiple: false,
     disabled: isUploading,
   });
@@ -60,7 +58,7 @@ export function ImageUploader({ onImageUpload, isUploading }: ImageUploaderProps
               {isUploading ? 'Uploading...' : 'Drag and drop an image or browse'}
             </h3>
             <p className="text-sm text-gray-500">
-              File must be JPEG, PNG, or WebP and up to {MAX_FILE_SIZE / 1024 / 1024}MB
+              Supports JPEG, PNG and WebP
             </p>
           </div>
 

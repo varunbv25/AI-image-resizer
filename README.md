@@ -1,12 +1,13 @@
-# AI-Powered Image Resizer
+# AI Image Processing Suite
 
-An intelligent image resizing and optimization tool that uses AI-powered canvas extension to create natural-looking results when extending images beyond their original dimensions. Perfect for content creators, social media managers, and anyone needing to adapt images to different aspect ratios while maintaining visual quality.
+A comprehensive image processing platform offering three powerful modes: AI-powered smart resizing with canvas extension, precision manual cropping, and advanced upscaling. Built with Next.js 15, TypeScript, and Google's Gemini AI for intelligent image processing.
 
 ## 🌟 Features
 
-### Core Functionality
+### 🤖 AI Image Resizing
 - **AI-Powered Canvas Extension**: Uses Google's Gemini 2.5 Flash Image model to intelligently extend image backgrounds
-- **Smart Resizing**: Maintains subject positioning while extending canvas areas seamlessly
+- **Smart Content-Aware Resizing**: Maintains subject positioning while extending canvas areas seamlessly
+- **Edge Detection Fallback**: Automatic fallback to edge-extension algorithms when AI is unavailable
 - **Multiple Aspect Ratios**: Pre-configured ratios including:
   - Instagram Stories/TikTok (9:16)
   - Portrait Print (2:3)
@@ -15,17 +16,32 @@ An intelligent image resizing and optimization tool that uses AI-powered canvas 
   - Standard (4:3)
   - Landscape (3:2)
 - **Custom Dimensions**: Support for any custom width and height
-- **Fallback Strategies**: Automatic fallback to edge-extension when AI is unavailable
-- **Web Optimization**: Outputs web-optimized images in JPEG, PNG, or WebP formats
 - **Real-time Preview**: Side-by-side comparison of original and processed images
-- **Drag & Drop Interface**: Intuitive file upload with comprehensive validation
 
-### User Experience
+### ✂️ Manual Cropping
+- **Precision Control**: Drag-and-zoom functionality for pixel-perfect cropping
+- **Interactive Canvas**: Click and drag image positioning within crop frame
+- **Zoom Controls**: Scale images up or down for precise framing
+- **Real-time Preview**: Live preview of crop area with exact dimensions
+- **Frame Constraints**: Maintains aspect ratio while allowing flexible positioning
+- **High-Quality Output**: Preserves image quality during cropping process
+
+### 🔍 Upscaling
+- **Quality Enhancement**: Advanced upscaling algorithms for resolution improvement
+- **Scale Factor Control**: 2x, 3x, 4x scaling options or custom target resolutions
+- **Batch Processing**: Support for processing multiple images simultaneously
+- **Quality Preservation**: Maintains image clarity and detail during upscaling
+- **Format Optimization**: Automatic format selection for best quality-to-size ratio
+
+### 🎯 Universal Features
+- **Drag & Drop Interface**: Intuitive file upload with comprehensive validation
 - **Progress Tracking**: Real-time processing status with detailed progress indicators
 - **Error Handling**: Graceful error handling with user-friendly messages
 - **File Validation**: Automatic validation of file size (max 10MB) and supported formats
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **Instant Download**: One-click download of processed images
+- **No Upload Limits**: Process images without restrictions
+- **Multiple Format Support**: JPEG, PNG, WebP input and output
 
 ## 🛠 Technology Stack
 
@@ -37,16 +53,18 @@ An intelligent image resizing and optimization tool that uses AI-powered canvas 
 - **Lucide React**: Beautiful, customizable icons
 
 ### Backend & Processing
-- **Next.js API Routes**: Serverless API endpoints
-- **Sharp.js**: High-performance image processing
+- **Next.js API Routes**: Serverless API endpoints for all processing modes
+- **Sharp.js**: High-performance image processing and manipulation
 - **Formidable**: Multipart form data parsing for file uploads
 - **Google Gemini AI**: Advanced AI model for intelligent image extension
+- **Custom Processing Algorithms**: Edge detection and upscaling implementations
 
 ### UI Components & Libraries
-- **Radix UI**: Accessible, unstyled UI primitives
+- **Radix UI**: Accessible, unstyled UI primitives (Dialog, Progress, Select, Slider, Tabs)
 - **React Dropzone**: File upload with drag & drop functionality
 - **Class Variance Authority**: Utility for creating variant-based component APIs
 - **clsx & tailwind-merge**: Conditional styling utilities
+- **Lucide React**: Beautiful, customizable icons
 
 ## 🚀 Getting Started
 
@@ -111,7 +129,15 @@ npm run lint
 
 ## 📖 Usage
 
-### Step-by-Step Guide
+### Processing Mode Selection
+
+The application offers three distinct processing modes accessible from the main interface:
+
+1. **AI Image Resizing** - For intelligent canvas extension and aspect ratio changes
+2. **Manual Cropping** - For precise, hands-on image cropping
+3. **Upscaling** - For resolution enhancement and quality improvement
+
+### 🤖 AI Image Resizing Mode
 
 1. **Upload Image**
    - Drag and drop an image file onto the upload area
@@ -134,18 +160,67 @@ npm run lint
    - Click "Download" to save the processed image
    - View metadata including dimensions, format, and file size
 
+### ✂️ Manual Cropping Mode
+
+1. **Upload Image**
+   - Upload your image using the drag-and-drop interface
+   - Image appears on an interactive canvas
+
+2. **Set Crop Dimensions**
+   - Select from preset aspect ratios or enter custom dimensions
+   - Crop frame appears on the canvas
+
+3. **Position and Scale**
+   - Drag the image to position it within the crop frame
+   - Use zoom controls to scale the image up or down
+   - Real-time preview shows exact crop area
+
+4. **Export Crop**
+   - Click "Crop Image" to process
+   - Download the precisely cropped result
+
+### 🔍 Upscaling Mode
+
+1. **Upload Image**
+   - Upload the image you want to enhance
+   - View original dimensions and file information
+
+2. **Choose Scale Factor**
+   - Select 2x, 3x, or 4x scaling multiplier
+   - Or specify exact target resolution
+   - Preview estimated output size
+
+3. **Process Enhancement**
+   - Click "Upscale Image" to begin processing
+   - Monitor progress with detailed status updates
+
+4. **Download Enhanced Image**
+   - Download the high-resolution result
+   - Compare with original using side-by-side preview
+
 ### Processing Methods
 
-The application uses multiple strategies to ensure the best results:
+The application uses multiple strategies across different modes:
 
+**AI Image Resizing:**
 1. **AI Extension (Primary)**: Uses Google Gemini 2.5 Flash Image model for intelligent background extension
 2. **Edge Extension (Fallback)**: Extends edges when AI is unavailable or fails
 3. **Smart Optimization**: Automatically optimizes output format and quality
 
+**Manual Cropping:**
+1. **Precision Algorithms**: High-quality cropping with Sharp.js
+2. **Interactive Preview**: Real-time crop area visualization
+3. **Quality Preservation**: Maintains original image quality
+
+**Upscaling:**
+1. **Advanced Interpolation**: High-quality scaling algorithms
+2. **Edge Enhancement**: Preserves and enhances image details
+3. **Format Optimization**: Optimal output format selection
+
 ## 🔌 API Endpoints
 
 ### POST `/api/upload`
-Upload and validate image files.
+Upload and validate image files for all processing modes.
 
 **Request:**
 - Content-Type: `multipart/form-data`
@@ -169,7 +244,7 @@ Upload and validate image files.
 ```
 
 ### POST `/api/process`
-Process images with AI extension or fallback methods.
+Process images with AI extension or fallback methods (AI Image Resizing mode).
 
 **Request:**
 ```json
@@ -207,6 +282,84 @@ Process images with AI extension or fallback methods.
 }
 ```
 
+### POST `/api/compress`
+Crop images with precise control (Manual Cropping mode).
+
+**Request:**
+```json
+{
+  "imageData": "data:image/jpeg;base64,...",
+  "cropData": {
+    "x": 100,
+    "y": 100,
+    "width": 800,
+    "height": 600
+  },
+  "targetDimensions": {
+    "width": 1080,
+    "height": 1920
+  },
+  "options": {
+    "quality": 80,
+    "format": "jpeg"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "imageData": "data:image/jpeg;base64,...",
+    "metadata": {
+      "width": 1080,
+      "height": 1920,
+      "format": "jpeg",
+      "size": 654321
+    }
+  }
+}
+```
+
+### POST `/api/upscale`
+Enhance and upscale images to higher resolutions (Upscaling mode).
+
+**Request:**
+```json
+{
+  "imageData": "data:image/jpeg;base64,...",
+  "scaleFactor": 2,
+  "targetDimensions": {
+    "width": 3840,
+    "height": 2160
+  },
+  "options": {
+    "quality": 90,
+    "format": "jpeg",
+    "preserveAspectRatio": true
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "imageData": "data:image/jpeg;base64,...",
+    "metadata": {
+      "width": 3840,
+      "height": 2160,
+      "format": "jpeg",
+      "size": 2048000,
+      "originalSize": 1024000,
+      "scaleFactor": 2
+    }
+  }
+}
+```
+
 ## ⚙️ Configuration
 
 ### Environment Variables
@@ -217,11 +370,13 @@ Process images with AI extension or fallback methods.
 
 ### Application Constants
 
-- **Max File Size**: 10MB
+- **Max File Size**: 10MB per file
 - **Supported Input Formats**: JPEG, PNG, WebP
 - **Supported Output Formats**: JPEG, PNG, WebP
-- **Processing Timeout**: 30 seconds
+- **Processing Timeout**: 60 seconds
 - **Default Quality**: 80%
+- **Upscaling Limits**: Up to 4x original resolution
+- **Batch Processing**: Support for multiple files in upscaling mode
 
 ### Supported Aspect Ratios
 
@@ -236,9 +391,20 @@ Process images with AI extension or fallback methods.
 
 ### Processing Strategies
 
+**AI Image Resizing:**
 1. **AI Extension (Primary)**: Uses Gemini 2.5 Flash Image model for intelligent background extension
 2. **Edge Extension (Fallback)**: Extends image edges when AI is unavailable
 3. **Smart Optimization**: Automatically optimizes output format and quality for web use
+
+**Manual Cropping:**
+1. **Interactive Canvas**: Real-time drag-and-drop positioning with zoom controls
+2. **Precision Algorithms**: High-quality cropping with Sharp.js processing
+3. **Quality Preservation**: Maintains original image fidelity during crop operations
+
+**Upscaling:**
+1. **Advanced Interpolation**: Multi-algorithm approach for optimal quality
+2. **Detail Enhancement**: Edge-preserving techniques for sharpness
+3. **Batch Optimization**: Efficient processing for multiple images
 
 ## 🏗️ Architecture
 
@@ -250,7 +416,9 @@ ai-image-resizer/
 │   ├── app/                    # Next.js App Router
 │   │   ├── api/
 │   │   │   ├── upload/        # File upload endpoint
-│   │   │   └── process/       # Image processing endpoint
+│   │   │   ├── process/       # AI image resizing endpoint
+│   │   │   ├── compress/      # Manual cropping endpoint
+│   │   │   └── upscale/       # Image upscaling endpoint
 │   │   ├── globals.css        # Global styles
 │   │   ├── layout.tsx         # Root layout
 │   │   └── page.tsx           # Main application page
@@ -262,18 +430,25 @@ ai-image-resizer/
 │   │   │   ├── input.tsx
 │   │   │   ├── progress.tsx
 │   │   │   ├── select.tsx
+│   │   │   ├── slider.tsx
 │   │   │   └── tabs.tsx
+│   │   ├── modes/            # Processing mode components
+│   │   │   ├── AIImageResizing.tsx  # AI-powered resizing mode
+│   │   │   ├── ManualCropping.tsx   # Manual cropping mode
+│   │   │   └── Upscaling.tsx        # Image upscaling mode
 │   │   ├── ImageUploader.tsx  # File upload component
 │   │   ├── DimensionSelector.tsx # Aspect ratio selector
 │   │   ├── ImagePreview.tsx   # Before/after preview
 │   │   └── ProcessingStatus.tsx # Progress indicator
 │   ├── hooks/                 # Custom React hooks
 │   │   ├── useFileUpload.ts   # File upload logic
-│   │   └── useImageProcessing.ts # Image processing logic
+│   │   ├── useImageProcessing.ts # Image processing logic
+│   │   └── useUpscaling.ts    # Upscaling logic
 │   ├── lib/                   # Utility libraries
 │   │   ├── constants.ts       # App constants
 │   │   ├── fileHandler.ts     # File handling utilities
 │   │   ├── imageProcessor.ts  # Core image processing
+│   │   ├── cloudConvert.ts    # Cloud processing utilities
 │   │   └── utils.ts           # General utilities
 │   └── types/                 # TypeScript definitions
 │       └── index.ts           # Type definitions
@@ -292,30 +467,72 @@ ai-image-resizer/
 
 ```mermaid
 graph TD
-    A[Main Page] --> B[ImageUploader]
-    A --> C[DimensionSelector]
-    A --> D[ImagePreview]
-    A --> E[ProcessingStatus]
+    A[Main Page] --> B[Mode Selection]
+    B --> C[AI Image Resizing]
+    B --> D[Manual Cropping]
+    B --> E[Upscaling]
 
-    B --> F[useFileUpload Hook]
-    D --> G[useImageProcessing Hook]
+    C --> F[ImageUploader]
+    C --> G[DimensionSelector]
+    C --> H[ImagePreview]
+    C --> I[ProcessingStatus]
 
-    F --> H[File Handler]
-    G --> I[Image Processor]
+    D --> J[ImageUploader]
+    D --> K[Interactive Canvas]
+    D --> L[Crop Controls]
+    D --> M[Zoom Controls]
 
-    H --> J[Upload API]
-    I --> K[Process API]
+    E --> N[ImageUploader]
+    E --> O[Scale Selector]
+    E --> P[Batch Processor]
+    E --> Q[Quality Controls]
 
-    K --> L[Gemini AI]
-    K --> M[Sharp.js]
+    F --> R[useFileUpload Hook]
+    J --> R
+    N --> R
+
+    H --> S[useImageProcessing Hook]
+    L --> T[Manual Crop Logic]
+    P --> U[useUpscaling Hook]
+
+    R --> V[File Handler]
+    S --> W[AI Image Processor]
+    T --> X[Crop Processor]
+    U --> Y[Upscale Processor]
+
+    V --> Z[Upload API]
+    W --> AA[Process API]
+    X --> BB[Compress API]
+    Y --> CC[Upscale API]
+
+    AA --> DD[Gemini AI]
+    AA --> EE[Sharp.js Edge Extension]
+    BB --> FF[Sharp.js Cropping]
+    CC --> GG[Advanced Interpolation]
+    CC --> HH[Detail Enhancement]
 ```
 
 ### Data Flow
 
+#### AI Image Resizing Mode
 1. **File Upload**: User uploads image → `useFileUpload` → `/api/upload` → File validation & metadata extraction
 2. **Dimension Selection**: User selects target dimensions → State update → Preview update
-3. **Processing**: User clicks process → `useImageProcessing` → `/api/process` → AI extension or fallback
+3. **AI Processing**: User clicks process → `useImageProcessing` → `/api/process` → AI extension or edge fallback
 4. **Download**: Processed image → Base64 to blob conversion → Browser download
+
+#### Manual Cropping Mode
+1. **File Upload**: User uploads image → `useFileUpload` → `/api/upload` → File validation & metadata extraction
+2. **Interactive Positioning**: User drags image within crop frame → Real-time position updates
+3. **Zoom & Scale**: User adjusts zoom → Image scale updates → Crop preview updates
+4. **Crop Processing**: User clicks crop → Manual crop logic → `/api/compress` → Sharp.js cropping
+5. **Download**: Cropped image → Base64 to blob conversion → Browser download
+
+#### Upscaling Mode
+1. **File Upload**: User uploads image → `useFileUpload` → `/api/upload` → File validation & metadata extraction
+2. **Scale Selection**: User selects scale factor or target resolution → Preview size calculation
+3. **Batch Processing**: User adds multiple files (optional) → Queue management
+4. **Upscale Processing**: User clicks upscale → `useUpscaling` → `/api/upscale` → Advanced interpolation
+5. **Download**: Enhanced image(s) → Base64 to blob conversion → Browser download
 
 ## 🚀 Deployment
 
@@ -372,30 +589,70 @@ npx tsc --noEmit
 
 ### Common Issues
 
-1. **API Key Not Working**
+1. **API Key Not Working (AI Image Resizing)**
    - Verify your Gemini API key is correct
    - Check the key has proper permissions
    - Ensure `.env.local` is in the root directory
+   - AI mode will fallback to edge extension if API fails
 
 2. **File Upload Fails**
    - Check file size is under 10MB
    - Verify file format is supported (JPEG, PNG, WebP)
    - Try a different image file
+   - Ensure browser supports modern JavaScript features
 
-3. **Processing Takes Too Long**
+3. **AI Processing Issues**
    - Large images may take longer to process
    - Check your internet connection
-   - Fallback methods will be used if AI fails
+   - Fallback edge extension will be used if AI fails
+   - Monitor processing status for detailed error messages
 
-4. **Build Errors**
+4. **Manual Cropping Problems**
+   - Ensure image is properly loaded before attempting to crop
+   - Check that crop frame is within image boundaries
+   - Verify target dimensions are reasonable
+   - Clear browser cache if canvas rendering issues occur
+
+5. **Upscaling Limitations**
+   - Very large upscale factors (>4x) may fail or take excessive time
+   - Check available system memory for large image processing
+   - Consider reducing image size before upscaling
+   - Use batch processing for multiple smaller images rather than one very large image
+
+6. **Build Errors**
    - Run `npm install` to ensure all dependencies are installed
    - Check Node.js version (requires 18+)
    - Clear `.next` folder and rebuild
+   - Verify TypeScript configuration is correct
 
-5. **Sharp Module Loading Error**
+7. **Sharp Module Loading Error**
    - Run `npm install --include=optional sharp`
    - Rebuild Sharp: `npm rebuild sharp`
    - For platform-specific issues, try: `npm install --os=win32 --cpu=x64 sharp`
+   - Check system architecture compatibility
+
+8. **Performance Issues**
+   - Large images may cause browser memory issues
+   - Consider resizing images before processing
+   - Close other browser tabs to free memory
+   - Use smaller batch sizes for upscaling operations
+
+### Mode-Specific Tips
+
+**AI Image Resizing:**
+- Works best with images that have clear subjects and backgrounds
+- Fallback mode provides reliable results when AI is unavailable
+- Complex or abstract images may benefit from manual cropping instead
+
+**Manual Cropping:**
+- Use zoom controls for precise positioning
+- Drag from the center of the image for better control
+- Preview updates in real-time to show exact crop area
+
+**Upscaling:**
+- Start with smaller scale factors (2x) for best results
+- Higher quality settings may significantly increase processing time
+- Batch processing works best with images of similar sizes
 
 ## 📝 License
 
@@ -403,4 +660,9 @@ This project is private and proprietary. All rights reserved.
 
 ---
 
-**Note**: This application requires a Google Gemini API key for AI-powered features. Fallback methods will be used if the API is unavailable.
+**Note**: This comprehensive image processing suite offers three distinct modes:
+- **AI Image Resizing** requires a Google Gemini API key for AI-powered features (fallback methods available)
+- **Manual Cropping** works entirely offline with no external dependencies
+- **Upscaling** uses advanced local algorithms for quality enhancement
+
+Choose the mode that best fits your workflow and requirements!
