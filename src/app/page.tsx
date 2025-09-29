@@ -124,7 +124,7 @@ export default function Home() {
         </div>
 
         <footer className="text-center mt-16 text-gray-500 text-sm">
-          <p>No file upload limits • Support for JPEG, PNG, WebP, and more</p>
+          <p>No file upload limits • Support for JPEG, PNG and WebP</p>
         </footer>
       </div>
     </div>
