@@ -31,10 +31,10 @@ export default function Home() {
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-12">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            AI Image Processing Suite
+            Image Processing Suite
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Choose from AI-powered smart cropping, manual precision cropping, or advanced upscaling
+            Choose from AI-powered smart resizing, manual precision cropping or advanced upscaling
           </p>
         </header>
 
