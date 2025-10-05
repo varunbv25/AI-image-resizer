@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Scissors, Bot, Maximize, ArrowLeft } from 'lucide-react';
+import { Scissors, Bot, Maximize, ArrowLeft, FileArchive } from 'lucide-react';
 import { AIImageResizing } from '@/components/modes/AIImageResizing';
 import { ManualCropping } from '@/components/modes/ManualCropping';
 import { Upscaling } from '@/components/modes/Upscaling';
+import { ImageCompression } from '@/components/modes/ImageCompression';
 
-type Mode = 'home' | 'ai-crop' | 'manual-crop' | 'upscaling';
+type Mode = 'home' | 'ai-crop' | 'manual-crop' | 'upscaling' | 'compression';
 
 export default function Home() {
   const [currentMode, setCurrentMode] = useState<Mode>('home');
@@ -21,6 +22,8 @@ export default function Home() {
         return <ManualCropping onBack={() => setCurrentMode('home')} />;
       case 'upscaling':
         return <Upscaling onBack={() => setCurrentMode('home')} />;
+      case 'compression':
+        return <ImageCompression onBack={() => setCurrentMode('home')} />;
       default:
         return renderHomePage();
     }
@@ -34,12 +37,12 @@ export default function Home() {
             Image Processing Suite
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Choose from AI-powered smart resizing, manual precision cropping or advanced upscaling
+            Choose from AI-powered smart resizing, manual precision cropping, advanced upscaling or image compression
           </p>
         </header>
 
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {/* AI Smart Crop */}
             <Card className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-blue-300"
                   onClick={() => setCurrentMode('ai-crop')}>
@@ -117,6 +120,33 @@ export default function Home() {
                 </ul>
                 <Button className="w-full bg-purple-600 hover:bg-purple-700">
                   Start Upscaling
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Image Compression */}
+            <Card className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-2 hover:border-orange-300"
+                  onClick={() => setCurrentMode('compression')}>
+              <CardHeader className="text-center pb-4">
+                <div className="w-16 h-16 mx-auto mb-4 bg-orange-100 rounded-full flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                  <FileArchive className="w-8 h-8 text-orange-600" />
+                </div>
+                <CardTitle className="text-xl font-bold text-gray-900">
+                  Image Compression
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center">
+                <p className="text-gray-600 mb-4">
+                  Reduce file size while maintaining image quality with smart compression
+                </p>
+                <ul className="text-sm text-gray-500 space-y-1 mb-6">
+                  <li>• Adjustable quality settings</li>
+                  <li>• Target file size control</li>
+                  <li>• Real-time compression preview</li>
+                  <li>• Multiple format support</li>
+                </ul>
+                <Button className="w-full bg-orange-600 hover:bg-orange-700">
+                  Start Compression
                 </Button>
               </CardContent>
             </Card>
