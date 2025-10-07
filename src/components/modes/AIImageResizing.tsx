@@ -76,12 +76,14 @@ export function AIImageResizing({}: AIImageResizingProps) {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Half - Controls and Dimensions */}
-        <div className="space-y-6">
-          {!uploadedImage ? (
-            <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
-          ) : (
+      {!uploadedImage ? (
+        <div className="max-w-2xl mx-auto">
+          <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Half - Controls and Dimensions */}
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -106,48 +108,41 @@ export function AIImageResizing({}: AIImageResizingProps) {
                 </p>
               </CardContent>
             </Card>
-          )}
 
-          {uploadError && (
-            <Card className="border-red-200">
-              <CardContent className="pt-6">
-                <p className="text-red-600 text-sm">{uploadError}</p>
-              </CardContent>
-            </Card>
-          )}
+            {uploadError && (
+              <Card className="border-red-200">
+                <CardContent className="pt-6">
+                  <p className="text-red-600 text-sm">{uploadError}</p>
+                </CardContent>
+              </Card>
+            )}
 
-          {uploadedImage && (
             <DimensionSelector
               originalDimensions={uploadedImage.originalDimensions}
               targetDimensions={targetDimensions}
               onDimensionsChange={handleDimensionsChange}
             />
-          )}
 
-          {uploadedImage && (
-            <>
+            <Button
+              onClick={handleProcess}
+              disabled={isProcessing}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              size="lg"
+            >
+              {isProcessing ? 'Processing...' : 'AI Image Resizing'}
+            </Button>
+
+            {processedImage && (
               <Button
-                onClick={handleProcess}
-                disabled={isProcessing}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                size="lg"
+                variant="outline"
+                onClick={() => downloadImage()}
+                className="w-full flex items-center justify-center gap-2"
               >
-                {isProcessing ? 'Processing...' : 'AI Image Resizing'}
+                <Download className="h-4 w-4" />
+                Download Processed Image
               </Button>
-
-              {processedImage && (
-                <Button
-                  variant="outline"
-                  onClick={() => downloadImage()}
-                  className="w-full flex items-center justify-center gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Download Processed Image
-                </Button>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </div>
 
         {/* Right Half - Preview */}
         <div className="space-y-4">
@@ -170,9 +165,20 @@ export function AIImageResizing({}: AIImageResizingProps) {
           )}
         </div>
       </div>
+      )}
+
+      {uploadError && !uploadedImage && (
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-red-200">
+            <CardContent className="pt-6">
+              <p className="text-red-600 text-sm">{uploadError}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Bottom Section - Result Details */}
-      {processedImage && (
+      {processedImage && uploadedImage && (
         <div className="mt-8">
           <div className="max-w-md mx-auto">
             <Card>

@@ -117,14 +117,15 @@ export function ImageCompression({}: ImageCompressionProps) {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Half - Controls */}
-        <div className="space-y-6">
-          {!uploadedImage ? (
-            <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
-          ) : (
-            <>
-              <Card>
+      {!uploadedImage ? (
+        <div className="max-w-2xl mx-auto">
+          <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Half - Controls */}
+          <div className="space-y-6">
+            <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     Image Uploaded
@@ -143,7 +144,7 @@ export function ImageCompression({}: ImageCompressionProps) {
                 </CardContent>
               </Card>
 
-              <Card>
+            <Card>
                 <CardHeader>
                   <CardTitle>Compression Settings</CardTitle>
                 </CardHeader>
@@ -194,40 +195,37 @@ export function ImageCompression({}: ImageCompressionProps) {
                 </CardContent>
               </Card>
 
+            <Button
+              onClick={handleCompress}
+              disabled={isCompressing}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+              size="lg"
+            >
+              {isCompressing ? 'Compressing...' : 'Apply Compression'}
+            </Button>
+
+            {compressedImage && (
               <Button
-                onClick={handleCompress}
-                disabled={isCompressing}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                onClick={handleDownload}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
                 size="lg"
               >
-                {isCompressing ? 'Compressing...' : 'Apply Compression'}
+                <Download className="h-5 w-5" />
+                Download Image
               </Button>
+            )}
 
-              {compressedImage && (
-                <Button
-                  onClick={handleDownload}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
-                  size="lg"
-                >
-                  <Download className="h-5 w-5" />
-                  Download Image
-                </Button>
-              )}
-            </>
-          )}
+            {(uploadError || compressionError) && (
+              <Card className="border-red-200">
+                <CardContent className="pt-6">
+                  <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
 
-          {(uploadError || compressionError) && (
-            <Card className="border-red-200">
-              <CardContent className="pt-6">
-                <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Right Half - Preview and Stats */}
-        <div className="space-y-6">
-          {uploadedImage && (
+          {/* Right Half - Preview and Stats */}
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -272,19 +270,29 @@ export function ImageCompression({}: ImageCompressionProps) {
                 )}
               </CardContent>
             </Card>
-          )}
 
-          {isCompressing && (
-            <ProcessingStatus
-              status={{
-                stage: 'optimizing',
-                progress: 50,
-                message: 'Compressing image...',
-              }}
-            />
-          )}
+            {isCompressing && (
+              <ProcessingStatus
+                status={{
+                  stage: 'optimizing',
+                  progress: 50,
+                  message: 'Compressing image...',
+                }}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {(uploadError || compressionError) && !uploadedImage && (
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-red-200">
+            <CardContent className="pt-6">
+              <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <footer className="text-center mt-12 text-gray-500 text-sm">
         <p>No file size limits • Supports JPEG, PNG and WebP</p>

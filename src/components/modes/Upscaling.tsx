@@ -107,12 +107,14 @@ export function Upscaling({ onBack }: UpscalingProps) {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Half - Controls */}
-        <div className="space-y-6">
-          {!uploadedImage ? (
-            <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
-          ) : (
+      {!uploadedImage ? (
+        <div className="max-w-2xl mx-auto">
+          <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Half - Controls */}
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -137,19 +139,16 @@ export function Upscaling({ onBack }: UpscalingProps) {
                 </p>
               </CardContent>
             </Card>
-          )}
 
-          {uploadError && (
-            <Card className="border-red-200">
-              <CardContent className="pt-6">
-                <p className="text-red-600 text-sm">{uploadError}</p>
-              </CardContent>
-            </Card>
-          )}
+            {uploadError && (
+              <Card className="border-red-200">
+                <CardContent className="pt-6">
+                  <p className="text-red-600 text-sm">{uploadError}</p>
+                </CardContent>
+              </Card>
+            )}
 
-          {uploadedImage && (
-            <>
-              <Card>
+            <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Settings className="w-4 h-4" />
@@ -259,29 +258,27 @@ export function Upscaling({ onBack }: UpscalingProps) {
                 </CardContent>
               </Card>
 
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleUpscale}
-                  disabled={isProcessing}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700"
-                >
-                  {isProcessing ? 'Upscaling...' : 'Upscale Image'}
-                </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleUpscale}
+                disabled={isProcessing}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+              >
+                {isProcessing ? 'Upscaling...' : 'Upscale Image'}
+              </Button>
 
-                {upscaledImage && (
-                  <Button
-                    variant="outline"
-                    onClick={handleDownload}
-                    className="flex items-center gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+              {upscaledImage && (
+                <Button
+                  variant="outline"
+                  onClick={handleDownload}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </Button>
+              )}
+            </div>
+          </div>
 
         {/* Right Half - Preview */}
         <div className="space-y-4">
@@ -343,9 +340,20 @@ export function Upscaling({ onBack }: UpscalingProps) {
           )}
         </div>
       </div>
+      )}
+
+      {uploadError && !uploadedImage && (
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-red-200">
+            <CardContent className="pt-6">
+              <p className="text-red-600 text-sm">{uploadError}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <footer className="text-center mt-12 text-gray-500 text-sm">
-        <p>No file size limits • High-quality upscaling</p>
+        <p>No file size limits • Supports JPEG, PNG and WebP</p>
       </footer>
     </div>
   );

@@ -12,12 +12,14 @@ interface DimensionSelectorProps {
   originalDimensions: ImageDimensions;
   targetDimensions: ImageDimensions;
   onDimensionsChange: (dimensions: ImageDimensions) => void;
+  showAIMessage?: boolean;
 }
 
 export function DimensionSelector({
   originalDimensions,
   targetDimensions,
   onDimensionsChange,
+  showAIMessage = true,
 }: DimensionSelectorProps) {
   const [selectedRatio, setSelectedRatio] = useState<string>('');
   const [customWidth, setCustomWidth] = useState(targetDimensions.width.toString());
@@ -69,16 +71,16 @@ export function DimensionSelector({
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2 bg-transparent gap-2 p-0">
             <TabsTrigger
               value="presets"
-              className="data-[state=active]:bg-black data-[state=active]:text-white"
+              className="border-2 border-gray-300 data-[state=active]:bg-black data-[state=active]:text-white data-[state=active]:border-black"
             >
               Presets
             </TabsTrigger>
             <TabsTrigger
               value="custom"
-              className="data-[state=active]:bg-black data-[state=active]:text-white"
+              className="border-2 border-gray-300 data-[state=active]:bg-black data-[state=active]:text-white data-[state=active]:border-black"
             >
               Custom
             </TabsTrigger>
@@ -149,7 +151,7 @@ export function DimensionSelector({
             <span>Target:</span>
             <span className="font-medium">{parseInt(customWidth) || 0} × {parseInt(customHeight) || 0}</span>
           </div>
-          {(parseInt(customWidth) > originalDimensions.width ||
+          {showAIMessage && (parseInt(customWidth) > originalDimensions.width ||
             parseInt(customHeight) > originalDimensions.height) && (
             <div className="text-blue-600 text-xs mt-2 flex items-center gap-1">
               ✨ AI will extend the canvas to fit these dimensions

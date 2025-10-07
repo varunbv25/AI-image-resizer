@@ -60,6 +60,7 @@ export function ManualCropping({}: ManualCroppingProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [croppedImageUrl, setCroppedImageUrl] = useState<string | null>(null);
   const [isImageHovered, setIsImageHovered] = useState(false);
+  const [isDimensionSelected, setIsDimensionSelected] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -106,26 +107,24 @@ export function ManualCropping({}: ManualCroppingProps) {
         scale,
       });
 
-      // Initialize crop frame in the center, constrained to image bounds
-      const maxFrameWidth = displayWidth * 0.8;
-      const maxFrameHeight = displayHeight * 0.8;
-      const frameWidth = Math.min(maxFrameWidth, 300);
-      const frameHeight = Math.min(maxFrameHeight, 400);
+      // Initialize crop frame as a square in the center
+      const maxFrameSize = Math.min(displayWidth, displayHeight) * 0.6;
+      const frameSize = Math.min(maxFrameSize, 250);
 
       // Center the frame within the image area
       const imageX = (containerWidth - displayWidth) / 2;
       const imageY = (containerHeight - displayHeight) / 2;
-      const frameX = imageX + (displayWidth - frameWidth) / 2;
-      const frameY = imageY + (displayHeight - frameHeight) / 2;
+      const frameX = imageX + (displayWidth - frameSize) / 2;
+      const frameY = imageY + (displayHeight - frameSize) / 2;
 
       setCropFrame({
         x: frameX,
         y: frameY,
-        width: frameWidth,
-        height: frameHeight,
+        width: frameSize,
+        height: frameSize,
       });
     }
-  }, [uploadedImage, targetDimensions]);
+  }, [uploadedImage]);
 
   const updateCropFrameForDimensions = useCallback((dimensions: ImageDimensions, currentImageDisplay: ImageDisplay) => {
     // Only update if we have valid image display data
@@ -176,21 +175,22 @@ export function ManualCropping({}: ManualCroppingProps) {
     });
   }, []);
 
-  // Update crop frame when imageDisplay or targetDimensions change
+  // Update crop frame only when dimensions are explicitly selected
   useEffect(() => {
-    if (imageDisplay && imageDisplay.width > 0 && imageDisplay.height > 0) {
+    if (isDimensionSelected && imageDisplay && imageDisplay.width > 0 && imageDisplay.height > 0) {
       updateCropFrameForDimensions(targetDimensions, imageDisplay);
     }
-  }, [imageDisplay, targetDimensions, updateCropFrameForDimensions]);
+  }, [isDimensionSelected, imageDisplay, targetDimensions, updateCropFrameForDimensions]);
 
   const handleReset = useCallback(() => {
     resetUpload();
     setCroppedImageUrl(null);
+    setIsDimensionSelected(false);
     setCropFrame({
       x: 100,
       y: 100,
       width: 300,
-      height: 400,
+      height: 300,
     });
     setImageDisplay({
       x: 0,
@@ -227,27 +227,50 @@ export function ManualCropping({}: ManualCroppingProps) {
       console.log('Crop coordinates:', { cropX, cropY, cropWidth, cropHeight });
       console.log('Image display:', imageDisplay);
       console.log('Crop frame:', cropFrame);
+      console.log('Is dimension selected:', isDimensionSelected);
 
-      // Set canvas to target dimensions
-      canvas.width = targetDimensions.width;
-      canvas.height = targetDimensions.height;
+      // Set canvas dimensions - use target dimensions if selected, otherwise use actual crop size
+      const outputWidth = isDimensionSelected ? targetDimensions.width : Math.round(cropWidth);
+      const outputHeight = isDimensionSelected ? targetDimensions.height : Math.round(cropHeight);
+
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
 
       const img = new window.Image();
       img.onload = async () => {
         console.log('Image loaded successfully');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw the cropped portion scaled to target dimensions
+        // Ensure crop coordinates are within bounds and round to avoid subpixel issues
+        const validCropX = Math.round(Math.max(0, cropX));
+        const validCropY = Math.round(Math.max(0, cropY));
+
+        // Ensure crop width/height don't exceed image bounds
+        const maxCropWidth = uploadedImage.originalDimensions.width - validCropX;
+        const maxCropHeight = uploadedImage.originalDimensions.height - validCropY;
+        const validCropWidth = Math.round(Math.min(cropWidth, maxCropWidth));
+        const validCropHeight = Math.round(Math.min(cropHeight, maxCropHeight));
+
+        console.log('Final crop values:', {
+          validCropX,
+          validCropY,
+          validCropWidth,
+          validCropHeight,
+          originalWidth: uploadedImage.originalDimensions.width,
+          originalHeight: uploadedImage.originalDimensions.height
+        });
+
+        // Draw the cropped portion to the canvas
         ctx.drawImage(
           img,
-          Math.max(0, cropX),
-          Math.max(0, cropY),
-          Math.min(cropWidth, uploadedImage.originalDimensions.width - cropX),
-          Math.min(cropHeight, uploadedImage.originalDimensions.height - cropY),
+          validCropX,
+          validCropY,
+          validCropWidth,
+          validCropHeight,
           0,
           0,
-          targetDimensions.width,
-          targetDimensions.height
+          outputWidth,
+          outputHeight
         );
 
         canvas.toBlob(async (blob) => {
@@ -296,7 +319,7 @@ export function ManualCropping({}: ManualCroppingProps) {
       console.error('Error cropping image:', error);
       setIsProcessing(false);
     }
-  }, [uploadedImage, targetDimensions, cropFrame, imageDisplay]);
+  }, [uploadedImage, targetDimensions, cropFrame, imageDisplay, isDimensionSelected]);
 
   // Handle crop frame movement
   const handleFrameMouseDown = useCallback((e: React.MouseEvent) => {
@@ -341,33 +364,66 @@ export function ManualCropping({}: ManualCroppingProps) {
     } else if (isResizing && resizeHandle && initialCropFrame) {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
-      const targetAspectRatio = targetDimensions.width / targetDimensions.height;
+      const targetAspectRatio = isDimensionSelected ? targetDimensions.width / targetDimensions.height : 0;
 
       const newFrame = { ...initialCropFrame };
 
-      // Handle corner resizing with aspect ratio constraint
+      // Handle corner and edge resizing
       if (resizeHandle.includes('e') || resizeHandle.includes('w') || resizeHandle.includes('n') || resizeHandle.includes('s')) {
         let newWidth = newFrame.width;
         let newHeight = newFrame.height;
 
-        // Determine primary resize direction
-        if (resizeHandle.includes('e')) {
-          newWidth = initialCropFrame.width + deltaX;
-        } else if (resizeHandle.includes('w')) {
-          newWidth = initialCropFrame.width - deltaX;
-        } else if (resizeHandle.includes('s')) {
-          newHeight = initialCropFrame.height + deltaY;
-        } else if (resizeHandle.includes('n')) {
-          newHeight = initialCropFrame.height - deltaY;
-        }
+        // Check if it's a corner handle (diagonal resize)
+        const isCorner = (resizeHandle.includes('n') || resizeHandle.includes('s')) &&
+                         (resizeHandle.includes('e') || resizeHandle.includes('w'));
 
-        // Maintain aspect ratio
-        if (resizeHandle.includes('e') || resizeHandle.includes('w')) {
-          // Width-based resize
-          newHeight = newWidth / targetAspectRatio;
+        if (isCorner) {
+          // Diagonal resize - adjust both width and height
+          if (resizeHandle.includes('e')) {
+            newWidth = initialCropFrame.width + deltaX;
+          } else if (resizeHandle.includes('w')) {
+            newWidth = initialCropFrame.width - deltaX;
+          }
+
+          if (resizeHandle.includes('s')) {
+            newHeight = initialCropFrame.height + deltaY;
+          } else if (resizeHandle.includes('n')) {
+            newHeight = initialCropFrame.height - deltaY;
+          }
+
+          // Maintain aspect ratio only if dimension is selected
+          if (isDimensionSelected && targetAspectRatio > 0) {
+            // Use the larger delta to determine which dimension to prioritize
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+              // Width change is larger, adjust height to match
+              newHeight = newWidth / targetAspectRatio;
+            } else {
+              // Height change is larger, adjust width to match
+              newWidth = newHeight * targetAspectRatio;
+            }
+          }
         } else {
-          // Height-based resize
-          newWidth = newHeight * targetAspectRatio;
+          // Edge resize - only one dimension changes
+          if (resizeHandle.includes('e')) {
+            newWidth = initialCropFrame.width + deltaX;
+          } else if (resizeHandle.includes('w')) {
+            newWidth = initialCropFrame.width - deltaX;
+          } else if (resizeHandle.includes('s')) {
+            newHeight = initialCropFrame.height + deltaY;
+          } else if (resizeHandle.includes('n')) {
+            newHeight = initialCropFrame.height - deltaY;
+          }
+
+          // Maintain aspect ratio only if dimension is selected
+          if (isDimensionSelected && targetAspectRatio > 0) {
+            if (resizeHandle.includes('e') || resizeHandle.includes('w')) {
+              // Width-based resize
+              newHeight = newWidth / targetAspectRatio;
+            } else {
+              // Height-based resize
+              newWidth = newHeight * targetAspectRatio;
+            }
+          }
         }
 
         // Apply position changes for corners that move the origin
@@ -382,17 +438,24 @@ export function ManualCropping({}: ManualCroppingProps) {
         newFrame.height = newHeight;
       }
 
-      // Enforce minimum size while maintaining aspect ratio
+      // Enforce minimum size
       const minSize = 40;
       if (newFrame.width < minSize || newFrame.height < minSize) {
-        if (targetAspectRatio > 1) {
-          // Landscape - set minimum width
-          newFrame.width = minSize;
-          newFrame.height = minSize / targetAspectRatio;
+        if (isDimensionSelected && targetAspectRatio > 0) {
+          // Maintain aspect ratio
+          if (targetAspectRatio > 1) {
+            // Landscape - set minimum width
+            newFrame.width = minSize;
+            newFrame.height = minSize / targetAspectRatio;
+          } else {
+            // Portrait/Square - set minimum height
+            newFrame.height = minSize;
+            newFrame.width = minSize * targetAspectRatio;
+          }
         } else {
-          // Portrait/Square - set minimum height
-          newFrame.height = minSize;
-          newFrame.width = minSize * targetAspectRatio;
+          // Free resize - just enforce minimum
+          if (newFrame.width < minSize) newFrame.width = minSize;
+          if (newFrame.height < minSize) newFrame.height = minSize;
         }
 
         // Adjust position if needed
@@ -416,21 +479,23 @@ export function ManualCropping({}: ManualCroppingProps) {
       newFrame.width = Math.min(imageRight - newFrame.x, newFrame.width);
       newFrame.height = Math.min(imageBottom - newFrame.y, newFrame.height);
 
-      // Re-adjust to maintain aspect ratio if size was constrained
-      const constrainedAspectRatio = newFrame.width / newFrame.height;
-      if (Math.abs(constrainedAspectRatio - targetAspectRatio) > 0.01) {
-        if (constrainedAspectRatio > targetAspectRatio) {
-          // Width is too large, reduce it
-          newFrame.width = newFrame.height * targetAspectRatio;
-        } else {
-          // Height is too large, reduce it
-          newFrame.height = newFrame.width / targetAspectRatio;
+      // Re-adjust to maintain aspect ratio if size was constrained (only if dimension selected)
+      if (isDimensionSelected && targetAspectRatio > 0) {
+        const constrainedAspectRatio = newFrame.width / newFrame.height;
+        if (Math.abs(constrainedAspectRatio - targetAspectRatio) > 0.01) {
+          if (constrainedAspectRatio > targetAspectRatio) {
+            // Width is too large, reduce it
+            newFrame.width = newFrame.height * targetAspectRatio;
+          } else {
+            // Height is too large, reduce it
+            newFrame.height = newFrame.width / targetAspectRatio;
+          }
         }
       }
 
       setCropFrame(newFrame);
     }
-  }, [isDragging, isResizing, dragStart, cropFrame, resizeHandle, initialCropFrame, targetDimensions, imageDisplay]);
+  }, [isDragging, isResizing, dragStart, cropFrame, resizeHandle, initialCropFrame, targetDimensions, imageDisplay, isDimensionSelected]);
 
   const handleGlobalMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -498,6 +563,7 @@ export function ManualCropping({}: ManualCroppingProps) {
 
   const handleDimensionsChange = (dimensions: ImageDimensions) => {
     setTargetDimensions(dimensions);
+    setIsDimensionSelected(true);
     updateCropFrameForDimensions(dimensions, imageDisplay);
   };
 
@@ -512,22 +578,22 @@ export function ManualCropping({}: ManualCroppingProps) {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <div className="border-b border-slate-200 sticky top-0 z-10 backdrop-blur-sm bg-white/95">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <Scissors className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">Manual Cropping</h1>
-            </div>
+    <div className="container mx-auto px-4 py-8">
+      <header className="text-center mb-8">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+            <Scissors className="w-6 h-6 text-green-600" />
           </div>
+          <h1 className="text-4xl font-bold text-gray-900">
+            Manual Cropping
+          </h1>
         </div>
-      </div>
+        <p className="text-lg text-gray-600">
+          Precise manual control with drag-and-zoom functionality for perfect cropping
+        </p>
+      </header>
 
-      <div className="container mx-auto px-6 py-8">
+      <div className="px-2">
         {!uploadedImage ? (
           <div className="max-w-2xl mx-auto">
             <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
@@ -541,11 +607,15 @@ export function ManualCropping({}: ManualCroppingProps) {
                 <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-xl font-semibold">Crop Preview</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-slate-600">Crop Mode: Active</span>
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      </div>
+                      <CardTitle className="text-xl font-semibold">
+                        {croppedImageUrl ? 'Comparison' : 'Crop Preview'}
+                      </CardTitle>
+                      {!croppedImageUrl && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-600">Crop Mode: Active</span>
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        </div>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -556,17 +626,47 @@ export function ManualCropping({}: ManualCroppingProps) {
                           <p className="text-slate-700 font-medium">Processing your crop...</p>
                         </div>
                       ) : croppedImageUrl ? (
-                        <div className="absolute inset-0 flex items-center justify-center p-8">
-                          <div className="relative max-w-full max-h-full">
-                            <Image
-                              src={croppedImageUrl}
-                              alt="Cropped result"
-                              width={targetDimensions.width}
-                              height={targetDimensions.height}
-                              className="rounded-lg shadow-lg max-w-full max-h-full object-contain"
-                            />
-                            <div className="absolute -top-8 left-0 bg-green-500 text-white text-xs px-3 py-1 rounded-full font-medium">
-                              Cropped • {targetDimensions.width}×{targetDimensions.height}
+                        <div className="absolute inset-0 grid grid-cols-2 divide-x divide-slate-300">
+                          {/* Original Image - Full Left Half */}
+                          <div className="relative flex flex-col bg-slate-50">
+                            <div className="absolute top-4 left-0 right-0 z-10">
+                              <h3 className="text-lg font-semibold text-slate-800 text-center">Original</h3>
+                            </div>
+                            <div className="flex-1 relative p-12">
+                              <Image
+                                src={`data:image/jpeg;base64,${uploadedImage.imageData}`}
+                                alt="Original image"
+                                fill
+                                className="object-contain p-4"
+                              />
+                            </div>
+                            <div className="absolute bottom-4 left-0 right-0">
+                              <p className="text-sm text-slate-600 text-center font-medium">
+                                {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Cropped Image - Full Right Half */}
+                          <div className="relative flex flex-col bg-slate-50">
+                            <div className="absolute top-4 left-0 right-0 z-10">
+                              <h3 className="text-lg font-semibold text-slate-800 text-center">Cropped</h3>
+                            </div>
+                            <div className="flex-1 relative p-12">
+                              <Image
+                                src={croppedImageUrl}
+                                alt="Cropped result"
+                                fill
+                                className="object-contain p-4"
+                              />
+                            </div>
+                            <div className="absolute bottom-4 left-0 right-0">
+                              <p className="text-sm text-slate-600 text-center font-medium">
+                                {isDimensionSelected
+                                  ? `${targetDimensions.width} × ${targetDimensions.height}`
+                                  : `${Math.round(cropFrame.width / imageDisplay.scale)} × ${Math.round(cropFrame.height / imageDisplay.scale)}`
+                                }
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -657,7 +757,10 @@ export function ManualCropping({}: ManualCroppingProps) {
                             <div className="absolute -top-8 left-0 bg-black/70 text-white text-xs px-2 py-1 rounded">
                               {Math.round(cropFrame.width / imageDisplay.scale)} × {Math.round(cropFrame.height / imageDisplay.scale)}
                               <span className="ml-2 opacity-75">
-                                ({(targetDimensions.width / targetDimensions.height).toFixed(2)})
+                                ({isDimensionSelected
+                                  ? (targetDimensions.width / targetDimensions.height).toFixed(2)
+                                  : (cropFrame.width / cropFrame.height).toFixed(2)
+                                })
                               </span>
                             </div>
                           </div>
@@ -665,21 +768,6 @@ export function ManualCropping({}: ManualCroppingProps) {
                       )}
                     </div>
 
-                    {/* Quick Stats */}
-                    {uploadedImage && !croppedImageUrl && imageDisplay && (
-                      <div className="mt-6 grid grid-cols-2 gap-4">
-                        <div className="text-center p-3 bg-slate-50 rounded-lg">
-                          <div className="text-sm text-slate-600">Crop Size</div>
-                          <div className="font-semibold text-lg">
-                            {Math.round(cropFrame.width / imageDisplay.scale)} × {Math.round(cropFrame.height / imageDisplay.scale)}
-                          </div>
-                        </div>
-                        <div className="text-center p-3 bg-slate-50 rounded-lg">
-                          <div className="text-sm text-slate-600">Output Size</div>
-                          <div className="font-semibold text-lg">{targetDimensions.width}×{targetDimensions.height}</div>
-                        </div>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -712,8 +800,8 @@ export function ManualCropping({}: ManualCroppingProps) {
                   originalDimensions={uploadedImage.originalDimensions}
                   targetDimensions={targetDimensions}
                   onDimensionsChange={handleDimensionsChange}
+                  showAIMessage={false}
                 />
-
 
                 {/* Keyboard Shortcuts */}
                 <Card className="border-0 shadow-lg">
@@ -775,29 +863,6 @@ export function ManualCropping({}: ManualCroppingProps) {
               </div>
             </div>
 
-            {/* Original Image Reference */}
-            {uploadedImage && (
-              <Card className="border-0 shadow-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Original Image Reference</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="relative max-w-md mx-auto">
-                    <div className="relative aspect-video bg-slate-100 rounded-lg overflow-hidden">
-                      <Image
-                        src={`data:image/jpeg;base64,${uploadedImage.imageData}`}
-                        alt="Original image"
-                        fill
-                        className="object-contain"
-                      />
-                    </div>
-                    <p className="text-sm text-slate-600 text-center mt-2">
-                      Original: {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         )}
 
@@ -813,6 +878,10 @@ export function ManualCropping({}: ManualCroppingProps) {
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
+
+      <footer className="text-center mt-12 text-gray-500 text-sm">
+        <p>No file size limits • Supports JPEG, PNG and WebP</p>
+      </footer>
     </div>
   );
 }
