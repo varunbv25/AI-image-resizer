@@ -32,12 +32,6 @@ export class ImageProcessor {
     }
   }
 
-  // Helper to create sharp instance with increased pixel limit
-  private sharpWithLimits(input: Buffer | string | object) {
-    return this.getSharp().then(sharp =>
-      sharp(input, { limitInputPixels: 1000000000 })
-    );
-  }
 
   async processImage(
     imageBuffer: Buffer,
