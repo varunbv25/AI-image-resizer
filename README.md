@@ -56,9 +56,8 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **File Validation**: Automatic validation of file size (max 10MB) and supported formats
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **Instant Download**: One-click download of processed images
-- **Smart Compression**: Client-side automatic compression before upload
+- **No Upload Limits**: Process images without restrictions
 - **Multiple Format Support**: JPEG, PNG, WebP input and output
-- **Cloud-Ready**: Optimized for deployment on Vercel and similar platforms
 
 ### 🎨 UI/UX Enhancements
 - **Interactive Sliders**: Mouse wheel scroll support on all sliders for precise control
@@ -470,10 +469,7 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 
 ### Application Constants
 
-- **Max File Size**: 10MB per file (auto-compressed client-side for optimal performance)
-- **Client Compression Target**: 3MB (ensures compatibility with cloud platforms)
-- **Max Client Dimensions**: 4096 x 4096 pixels (resized if larger)
-- **Server Pixel Limit**: 1 gigapixel (1,000 megapixels)
+- **Max File Size**: 10MB per file
 - **Supported Input Formats**: JPEG, PNG, WebP
 - **Supported Output Formats**: JPEG, PNG, WebP
 - **Processing Timeout**: 60 seconds

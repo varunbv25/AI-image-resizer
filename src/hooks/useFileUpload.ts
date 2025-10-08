@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react';
 import { ImageDimensions, APIResponse } from '@/types';
-import { compressImageFile } from '@/lib/clientImageCompressor';
 
 interface UploadedImageData {
   filename: string;
@@ -22,16 +21,8 @@ export function useFileUpload() {
     setError(null);
 
     try {
-      // Compress image on client side before uploading to stay under Vercel's 4.5MB limit
-      const compressedFile = await compressImageFile(file, {
-        maxWidth: 4096,
-        maxHeight: 4096,
-        quality: 0.85,
-        maxSizeMB: 3, // Target 3MB (leaves room for base64 encoding ~4MB)
-      });
-
       const formData = new FormData();
-      formData.append('image', compressedFile);
+      formData.append('image', file);
 
       const response = await fetch('/api/upload', {
         method: 'POST',
