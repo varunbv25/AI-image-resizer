@@ -1,6 +1,7 @@
 /**
  * Client-side image compression utility
  * Compresses images in the browser before uploading to stay under Vercel's 4.5MB limit
+ * Files >50MB are aggressively compressed to web-optimized sizes
  */
 
 export interface CompressionOptions {
@@ -8,18 +9,25 @@ export interface CompressionOptions {
   maxHeight?: number;
   quality?: number;
   maxSizeMB?: number;
+  isLargeFile?: boolean;
 }
 
 export async function compressImageFile(
   file: File,
   options: CompressionOptions = {}
 ): Promise<File> {
+  const fileSizeMB = file.size / (1024 * 1024);
+  const isVeryLarge = fileSizeMB > 50;
+
+  // For files >50MB, apply aggressive web optimization
   const {
-    maxWidth = 4096,
-    maxHeight = 4096,
-    quality = 0.85,
-    maxSizeMB = 3, // Target 3MB to leave headroom for base64 encoding
+    maxWidth = isVeryLarge ? 2048 : 4096,
+    maxHeight = isVeryLarge ? 2048 : 4096,
+    quality = isVeryLarge ? 0.75 : 0.85,
+    maxSizeMB = isVeryLarge ? 2 : 3, // More aggressive target for large files
   } = options;
+
+  console.log(`Compressing ${fileSizeMB.toFixed(2)}MB file${isVeryLarge ? ' (web optimization mode)' : ''}...`);
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -78,6 +86,13 @@ export async function compressImageFile(
                   type: file.type,
                   lastModified: Date.now(),
                 });
+
+                const originalSizeMB = file.size / (1024 * 1024);
+                const finalSizeMB = blob.size / (1024 * 1024);
+                const reduction = ((originalSizeMB - finalSizeMB) / originalSizeMB * 100).toFixed(1);
+
+                console.log(`Compression complete: ${originalSizeMB.toFixed(2)}MB → ${finalSizeMB.toFixed(2)}MB (${reduction}% reduction)`);
+
                 resolve(compressedFile);
               } else {
                 // Try again with lower quality
