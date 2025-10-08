@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { APIResponse, ImageDimensions } from '@/types';
 
+// Configure route to handle large payloads
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 async function getSharp() {
   try {
     const sharpModule = await import('sharp');

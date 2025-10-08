@@ -4,6 +4,11 @@ import { FileHandler } from '@/lib/fileHandler';
 import { createCloudConvertService } from '@/lib/cloudConvert';
 import { APIResponse, ImageDimensions, ImageProcessingOptions, ExtensionStrategy } from '@/types';
 
+// Configure route to handle large payloads
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
