@@ -12,7 +12,11 @@ async function compressImage(
   quality?: number
 ): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
-  const image = sharp(buffer);
+
+  // Increase pixel limit to handle large images
+  const image = sharp(buffer, {
+    limitInputPixels: 1000000000 // 1 gigapixel limit
+  });
 
   switch (format) {
     case 'jpeg':
@@ -58,8 +62,10 @@ export async function POST(req: NextRequest) {
 
     const sharp = (await import('sharp')).default;
 
-    // Get image metadata
-    const metadata = await sharp(buffer).metadata();
+    // Get image metadata with increased pixel limit
+    const metadata = await sharp(buffer, {
+      limitInputPixels: 1000000000
+    }).metadata();
     const format = metadata.format || 'jpeg';
 
     // Target size in bytes

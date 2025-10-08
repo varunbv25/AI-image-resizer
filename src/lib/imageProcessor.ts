@@ -21,11 +21,22 @@ export class ImageProcessor {
         throw new Error('Sharp is not a function');
       }
 
+      // Increase pixel limit to handle large images (1 gigapixel)
+      sharp.cache(false);
+      sharp.concurrency(1);
+
       return sharp;
     } catch (error) {
       console.error('Failed to load Sharp:', error);
       throw new Error('Sharp module could not be loaded. Image processing is not available.');
     }
+  }
+
+  // Helper to create sharp instance with increased pixel limit
+  private sharpWithLimits(input: Buffer | string | object) {
+    return this.getSharp().then(sharp =>
+      sharp(input, { limitInputPixels: 1000000000 })
+    );
   }
 
   async processImage(
@@ -59,7 +70,7 @@ export class ImageProcessor {
             );
           } else {
             // Check if AI processed image meets target dimensions, crop if needed
-            const resultMetadata = await sharp(processedBuffer).metadata();
+            const resultMetadata = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).metadata();
             const resultWidth = resultMetadata.width || 0;
             const resultHeight = resultMetadata.height || 0;
 
@@ -92,7 +103,7 @@ export class ImageProcessor {
       const optimizedBuffer = await this.optimizeForWeb(processedBuffer, options);
 
       // Get metadata
-      const metadata = await sharp(optimizedBuffer).metadata();
+      const metadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000 }).metadata();
 
       return {
         buffer: optimizedBuffer,
@@ -136,7 +147,7 @@ export class ImageProcessor {
       const base64Image = imageData.toString('base64');
 
       // Detect image format
-      const metadata = await sharp(imageBuffer).metadata();
+      const metadata = await sharp(imageBuffer, { limitInputPixels: 1000000000 }).metadata();
       const imageFormat = metadata.format || 'jpeg';
 
       // Create prompt for nano banana model
@@ -217,7 +228,7 @@ export class ImageProcessor {
     const edgeColor = await this.detectDominantEdgeColor(imageBuffer);
 
     // Get actual dimensions from the image buffer to ensure consistency
-    const actualMetadata = await sharp(imageBuffer).metadata();
+    const actualMetadata = await sharp(imageBuffer, { limitInputPixels: 1000000000 }).metadata();
     const actualWidth = actualMetadata.width || originalDimensions.width;
     const actualHeight = actualMetadata.height || originalDimensions.height;
 
@@ -247,7 +258,7 @@ export class ImageProcessor {
 
     // If we had to make the canvas larger than requested, resize to exact target
     if (finalTargetWidth !== targetDimensions.width || finalTargetHeight !== targetDimensions.height) {
-      result = await sharp(result)
+      result = await sharp(result, { limitInputPixels: 1000000000 })
         .resize(targetDimensions.width, targetDimensions.height, { fit: 'fill' })
         .jpeg({ quality: 90 })
         .toBuffer();
@@ -259,7 +270,7 @@ export class ImageProcessor {
   private async detectDominantEdgeColor(imageBuffer: Buffer): Promise<{ r: number; g: number; b: number }> {
     try {
       const sharp = await this.getSharp();
-      const image = sharp(imageBuffer);
+      const image = sharp(imageBuffer, { limitInputPixels: 1000000000 });
       const metadata = await image.metadata();
       const width = metadata.width || 0;
       const height = metadata.height || 0;
@@ -371,7 +382,7 @@ export class ImageProcessor {
     targetDimensions: ImageDimensions
   ): Promise<Buffer> {
     const sharp = await this.getSharp();
-    const metadata = await sharp(imageBuffer).metadata();
+    const metadata = await sharp(imageBuffer, { limitInputPixels: 1000000000 }).metadata();
     const originalWidth = metadata.width || 0;
     const originalHeight = metadata.height || 0;
 
@@ -385,7 +396,7 @@ export class ImageProcessor {
     const scaledHeight = Math.round(originalHeight * scale);
 
     // Resize and center crop to exact dimensions
-    return await sharp(imageBuffer)
+    return await sharp(imageBuffer, { limitInputPixels: 1000000000 })
       .resize(scaledWidth, scaledHeight)
       .extract({
         left: Math.max(0, Math.floor((scaledWidth - targetDimensions.width) / 2)),
@@ -411,8 +422,8 @@ export class ImageProcessor {
       }
 
       // Get metadata for both images
-      const originalMeta = await sharp(originalBuffer).metadata();
-      const processedMeta = await sharp(processedBuffer).metadata();
+      const originalMeta = await sharp(originalBuffer, { limitInputPixels: 1000000000 }).metadata();
+      const processedMeta = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).metadata();
 
       // If dimensions are different, images are different
       if (originalMeta.width !== processedMeta.width ||
@@ -421,8 +432,8 @@ export class ImageProcessor {
       }
 
       // Compare image statistics for a quick content comparison
-      const originalStats = await sharp(originalBuffer).stats();
-      const processedStats = await sharp(processedBuffer).stats();
+      const originalStats = await sharp(originalBuffer, { limitInputPixels: 1000000000 }).stats();
+      const processedStats = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).stats();
 
       // Compare mean values across channels with a tolerance
       const tolerance = 5; // Allow small differences due to compression/processing
@@ -448,7 +459,7 @@ export class ImageProcessor {
     options: ImageProcessingOptions
   ): Promise<Buffer> {
     const sharp = await this.getSharp();
-    const sharpInstance = sharp(imageBuffer);
+    const sharpInstance = sharp(imageBuffer, { limitInputPixels: 1000000000 });
 
     switch (options.format) {
       case 'jpeg':

@@ -3,6 +3,11 @@ import { ImageProcessor } from '@/lib/imageProcessor';
 import { APIResponse } from '@/types';
 import { SUPPORTED_FORMATS } from '@/lib/constants';
 
+// Configure route to handle large payloads
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     console.log('Upload API called');

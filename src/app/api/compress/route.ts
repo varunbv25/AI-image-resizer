@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createCloudConvertService } from '@/lib/cloudConvert';
 import { APIResponse } from '@/types';
 
+// Configure route to handle large payloads
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     console.log('Compress API called');
@@ -58,7 +63,7 @@ export async function POST(req: NextRequest) {
 
       const sharp = (await import('sharp')).default;
 
-      let sharpInstance = sharp(buffer);
+      let sharpInstance = sharp(buffer, { limitInputPixels: 1000000000 });
 
       const qualityValue = quality ? parseInt(quality) : 80;
 

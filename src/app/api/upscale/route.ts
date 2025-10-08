@@ -15,6 +15,10 @@ async function getSharp() {
       throw new Error('Sharp is not a function');
     }
 
+    // Increase pixel limit to handle large images (1 gigapixel)
+    sharp.cache(false);
+    sharp.concurrency(1);
+
     return sharp;
   } catch (error) {
     console.error('Failed to load Sharp:', error);
@@ -38,8 +42,10 @@ async function upscaleImage(
 }> {
   const sharp = await getSharp();
 
-  // Get original dimensions
-  const originalMetadata = await sharp(imageBuffer).metadata();
+  // Get original dimensions with increased pixel limit
+  const originalMetadata = await sharp(imageBuffer, {
+    limitInputPixels: 1000000000 // 1 gigapixel limit
+  }).metadata();
   const originalWidth = originalMetadata.width || 0;
   const originalHeight = originalMetadata.height || 0;
 
@@ -53,7 +59,9 @@ async function upscaleImage(
   }
 
   // Use Lanczos3 for high-quality upscaling
-  const processedBuffer = await sharp(imageBuffer)
+  const processedBuffer = await sharp(imageBuffer, {
+    limitInputPixels: 1000000000 // 1 gigapixel limit
+  })
     .resize(targetDimensions.width, targetDimensions.height, {
       kernel: 'lanczos3',
       fit: 'fill'
@@ -62,7 +70,9 @@ async function upscaleImage(
     .toBuffer();
 
   // Apply output format
-  const sharpInstance = sharp(processedBuffer);
+  const sharpInstance = sharp(processedBuffer, {
+    limitInputPixels: 1000000000
+  });
   let finalBuffer: Buffer;
 
   switch (format) {
@@ -77,7 +87,9 @@ async function upscaleImage(
   }
 
   // Get final metadata
-  const finalMetadata = await sharp(finalBuffer).metadata();
+  const finalMetadata = await sharp(finalBuffer, {
+    limitInputPixels: 1000000000
+  }).metadata();
 
   return {
     buffer: finalBuffer,
