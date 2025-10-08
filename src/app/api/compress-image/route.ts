@@ -1,10 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { APIResponse } from '@/types';
 
+async function compressImage(
+  buffer: Buffer,
+  format: string,
+  quality?: number
+): Promise<Buffer> {
+  const sharp = (await import('sharp')).default;
+  const image = sharp(buffer);
+
+  switch (format) {
+    case 'jpeg':
+    case 'jpg':
+      return image.jpeg({
+        quality: quality || 80,
+        mozjpeg: true,
+        progressive: true
+      }).toBuffer();
+
+    case 'png':
+      return image.png({
+        compressionLevel: 9,
+        palette: true
+      }).toBuffer();
+
+    case 'webp':
+      return image.webp({
+        quality: quality || 80
+      }).toBuffer();
+
+    default:
+      return image.jpeg({
+        quality: quality || 80,
+        mozjpeg: true,
+        progressive: true
+      }).toBuffer();
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageData, quality, maxFileSizePercent, originalSize } = body;
+    const { imageData, maxFileSizePercent, originalSize } = body;
 
     if (!imageData) {
       throw new Error('No image data provided');
@@ -20,34 +57,12 @@ export async function POST(req: NextRequest) {
     const metadata = await sharp(buffer).metadata();
     const format = metadata.format || 'jpeg';
 
-    let sharpInstance = sharp(buffer);
-    let compressedBuffer: Buffer;
-    let currentQuality = quality;
-
     // Target size in bytes
     const targetSize = (originalSize * maxFileSizePercent) / 100;
 
-    // Initial compression attempt
-    switch (format) {
-      case 'jpeg':
-      case 'jpg':
-        sharpInstance = sharpInstance.jpeg({ quality: currentQuality, mozjpeg: true });
-        break;
-      case 'png':
-        sharpInstance = sharpInstance.png({
-          quality: currentQuality,
-          compressionLevel: 9,
-          effort: 10
-        });
-        break;
-      case 'webp':
-        sharpInstance = sharpInstance.webp({ quality: currentQuality });
-        break;
-      default:
-        sharpInstance = sharpInstance.jpeg({ quality: currentQuality, mozjpeg: true });
-    }
-
-    compressedBuffer = await sharpInstance.toBuffer();
+    // Initial compression attempt with optimal quality settings
+    let currentQuality = 80; // Start with 80 for JPEG/WebP
+    let compressedBuffer = await compressImage(buffer, format, currentQuality);
 
     // If compressed size is still larger than target, reduce quality iteratively
     let attempts = 0;
@@ -55,29 +70,7 @@ export async function POST(req: NextRequest) {
 
     while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
       currentQuality = Math.max(10, currentQuality - 10);
-
-      let retryInstance = sharp(buffer);
-
-      switch (format) {
-        case 'jpeg':
-        case 'jpg':
-          retryInstance = retryInstance.jpeg({ quality: currentQuality, mozjpeg: true });
-          break;
-        case 'png':
-          retryInstance = retryInstance.png({
-            quality: currentQuality,
-            compressionLevel: 9,
-            effort: 10
-          });
-          break;
-        case 'webp':
-          retryInstance = retryInstance.webp({ quality: currentQuality });
-          break;
-        default:
-          retryInstance = retryInstance.jpeg({ quality: currentQuality, mozjpeg: true });
-      }
-
-      compressedBuffer = await retryInstance.toBuffer();
+      compressedBuffer = await compressImage(buffer, format, currentQuality);
       attempts++;
     }
 

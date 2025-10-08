@@ -28,23 +28,26 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 
 ### 🔍 Upscaling
 - **Quality Enhancement**: Advanced upscaling algorithms for resolution improvement
-- **Scale Factor Control**: 2x, 3x, 4x scaling options or custom target resolutions
+- **Scale Factor Control**: 1.1x to 4x scaling options or custom target resolutions
+- **Upscaling Only**: Constrained to only enlarge images, not reduce size
+- **Minimum Constraints**: Target resolution cannot be smaller than original
 - **Batch Processing**: Support for processing multiple images simultaneously
 - **Quality Preservation**: Maintains image clarity and detail during upscaling
 - **Format Optimization**: Automatic format selection for best quality-to-size ratio
 
 ### 📦 Image Compression
 - **Smart File Size Reduction**: Reduce image file sizes by up to 90% while maintaining visual quality
+- **Auto-Optimized Quality**: Starts with optimal quality settings (80% for JPEG/WebP, level 9 for PNG)
 - **Iterative Compression**: Automatically adjusts quality to reach target file size
-- **Quality Control**: Fine-tune compression with adjustable quality slider (1-100%)
 - **Target Size Control**: Set maximum file size as percentage of original (10-100%)
 - **Format-Specific Optimization**:
-  - JPEG: MozJPEG optimization for superior compression
-  - PNG: Maximum compression level with high effort encoding
-  - WebP: Advanced WebP compression algorithms
+  - JPEG: MozJPEG with progressive encoding for superior compression
+  - PNG: Compression level 9 with palette optimization
+  - WebP: Advanced WebP compression algorithms (80% quality)
 - **Real-time Preview**: Live preview with before/after comparison
-- **Compression Statistics**: Detailed metrics showing file size reduction and compression ratio
+- **Compression Statistics**: Detailed metrics showing original, compressed, and target file sizes
 - **Multi-attempt Algorithm**: Up to 10 compression attempts to achieve optimal results
+- **Interactive Controls**: Mouse wheel scroll support on sliders for precise adjustments
 
 ### 🎯 Universal Features
 - **Drag & Drop Interface**: Intuitive file upload with comprehensive validation
@@ -55,6 +58,21 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Instant Download**: One-click download of processed images
 - **No Upload Limits**: Process images without restrictions
 - **Multiple Format Support**: JPEG, PNG, WebP input and output
+
+### 🎨 UI/UX Enhancements
+- **Interactive Sliders**: Mouse wheel scroll support on all sliders for precise control
+  - Hover over any slider and scroll to adjust values
+  - Prevents page scrolling when adjusting slider values
+  - Smooth incremental adjustments based on slider type
+- **Side-by-Side Preview**: Clean comparison layout for before/after images
+  - Original Image vs Processed Result
+  - Clear dimension labels
+  - Professional card-based layout
+- **Real-time Feedback**: Live updates of target sizes and compression percentages
+- **Keyboard Shortcuts** (Manual Cropping):
+  - Arrow keys: Move crop frame
+  - Space: Apply crop
+  - Ctrl+R: Reset
 
 ## 🛠 Technology Stack
 
@@ -200,8 +218,8 @@ The application offers four distinct processing modes accessible from the main i
    - View original dimensions and file information
 
 2. **Choose Scale Factor**
-   - Select 2x, 3x, or 4x scaling multiplier
-   - Or specify exact target resolution
+   - Select 1.1x to 4x scaling multiplier
+   - Or specify exact target resolution (minimum: original dimensions)
    - Preview estimated output size
 
 3. **Process Enhancement**
@@ -219,18 +237,19 @@ The application offers four distinct processing modes accessible from the main i
    - View original file size and dimensions
 
 2. **Configure Compression Settings**
-   - **Max File Size**: Set target file size as percentage of original (10-100%)
-   - **Quality**: Adjust compression quality level (1-100%)
-   - Preview estimated target file size in KB
+   - **Target File Size**: Set target size as percentage of original (10-100%)
+   - Use slider or mouse wheel scroll for precise adjustment
+   - Preview estimated target file size and reduction percentage
 
 3. **Apply Compression**
    - Click "Apply Compression" to start processing
-   - Algorithm automatically adjusts quality to meet target size
+   - Algorithm starts with optimal quality (80% JPEG/WebP, level 9 PNG)
+   - Automatically reduces quality by 10% increments if needed
    - Multiple optimization attempts ensure best quality-to-size ratio
 
 4. **Download Optimized Image**
    - Preview compressed image with statistics
-   - View compression ratio and size reduction percentage
+   - View original, compressed, and target file sizes
    - Download web-optimized image
 
 ### Processing Methods
@@ -411,7 +430,6 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 ```json
 {
   "imageData": "data:image/jpeg;base64,...",
-  "quality": 80,
   "maxFileSizePercent": 40,
   "originalSize": 2048000
 }
@@ -432,10 +450,14 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 ```
 
 **Algorithm Details:**
-- Iteratively adjusts quality to achieve target file size
-- Supports JPEG (with MozJPEG), PNG (level 9, effort 10), and WebP formats
+- Starts with optimal quality settings (80% for JPEG/WebP, level 9 for PNG)
+- Iteratively reduces quality by 10% increments to achieve target file size
+- Format-specific compression:
+  - JPEG: MozJPEG with progressive encoding
+  - PNG: Level 9 compression with palette optimization
+  - WebP: 80% quality starting point
 - Maximum 10 compression attempts with minimum 10% quality threshold
-- Automatically selects optimal format-specific compression settings
+- Returns actual quality used in final compressed image
 
 ## ⚙️ Configuration
 
@@ -452,7 +474,7 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 - **Supported Output Formats**: JPEG, PNG, WebP
 - **Processing Timeout**: 60 seconds
 - **Default Quality**: 80%
-- **Upscaling Limits**: Up to 4x original resolution
+- **Upscaling Range**: 1.1x to 4x original resolution (enlarge only)
 - **Batch Processing**: Support for multiple files in upscaling mode
 
 ### Supported Aspect Ratios
@@ -484,13 +506,15 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 3. **Batch Optimization**: Efficient processing for multiple images
 
 **Image Compression:**
-1. **Iterative Optimization**: Multi-pass compression with automatic quality adjustment
-2. **Format-Specific Engines**:
-   - JPEG: MozJPEG for superior compression efficiency
-   - PNG: Maximum compression (level 9) with high effort encoding
-   - WebP: Modern compression for optimal web delivery
-3. **Intelligent Size Targeting**: Automatically balances quality and file size
-4. **Quality Thresholds**: Ensures minimum 10% quality, maximum 10 optimization attempts
+1. **Auto-Optimized Starting Point**: Begins with optimal quality settings for each format
+2. **Iterative Optimization**: Multi-pass compression with automatic quality adjustment
+3. **Format-Specific Engines**:
+   - JPEG: MozJPEG with progressive encoding (starts at 80% quality)
+   - PNG: Level 9 compression with palette optimization
+   - WebP: 80% quality compression
+4. **Intelligent Size Targeting**: Automatically reduces quality by 10% increments to reach target
+5. **Quality Thresholds**: Ensures minimum 10% quality, maximum 10 optimization attempts
+6. **Interactive UI**: Mouse wheel scroll support on all sliders for precise control
 
 ## 🏗️ Architecture
 
@@ -612,6 +636,270 @@ graph TD
     AK --> AR[Iterative Quality Adjustment]
 ```
 
+### Detailed Data Flow Diagrams
+
+#### AI Image Resizing Flow
+```
+┌─────────────┐
+│ User Upload │
+└──────┬──────┘
+       │
+       v
+┌─────────────────────┐
+│ File Validation     │ (/api/upload)
+│ - Check format      │
+│ - Check size (10MB) │
+│ - Extract metadata  │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Dimension Selection │
+│ - Preset ratios     │
+│ - Custom dimensions │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Process Image       │ (/api/process)
+└──────┬──────────────┘
+       │
+       v
+    ┌──┴──┐
+    │  ?  │ Gemini AI Available?
+    └─┬─┬─┘
+      │ │
+   Yes│ │No
+      │ │
+      v v
+  ┌───────┐  ┌──────────────┐
+  │Gemini │  │Edge Extension│
+  │2.5    │  │Fallback      │
+  │Flash  │  │- Edge color  │
+  │Image  │  │  detection   │
+  └───┬───┘  │- Canvas ext. │
+      │      └──────┬───────┘
+      │             │
+      └──────┬──────┘
+             │
+             v
+      ┌──────────┐
+      │ Validate │
+      │ Output   │
+      └────┬─────┘
+           │
+           v
+      ┌──────────┐
+      │Crop to   │
+      │exact size│
+      └────┬─────┘
+           │
+           v
+      ┌──────────┐
+      │ Optimize │
+      │ for web  │
+      └────┬─────┘
+           │
+           v
+      ┌──────────┐
+      │ Download │
+      └──────────┘
+```
+
+#### Manual Cropping Flow
+```
+┌─────────────┐
+│ User Upload │
+└──────┬──────┘
+       │
+       v
+┌─────────────────────┐
+│ File Validation     │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Interactive Canvas  │
+│ - Drag crop frame   │
+│ - Resize handles    │
+│ - Position image    │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Dimension Selector  │
+│ - Preset ratios     │
+│ - Custom size       │
+│ - Auto-update frame │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Client-side Crop    │
+│ - Canvas drawImage  │
+│ - Calculate coords  │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Compress API        │ (/api/compress)
+│ - Sharp.js crop     │
+│ - Quality 85        │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Preview Comparison  │
+│ ┌────────┬────────┐ │
+│ │Original│Cropped │ │
+│ └────────┴────────┘ │
+└──────┬──────────────┘
+       │
+       v
+┌──────────┐
+│ Download │
+└──────────┘
+```
+
+#### Upscaling Flow
+```
+┌─────────────┐
+│ User Upload │
+└──────┬──────┘
+       │
+       v
+┌─────────────────────┐
+│ File Validation     │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Settings Selection  │
+│ ┌────────┬────────┐ │
+│ │ Scale  │ Target │ │
+│ │ Factor │  Res.  │ │
+│ └────────┴────────┘ │
+│ + Quality slider    │
+│ (wheel scroll)      │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Upscale API         │ (/api/upscale)
+│ - Get original dims │
+│ - Calculate target  │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Validate Dimensions │
+│ - Min: 1.1x scale   │
+│ - Target >= Original│
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Lanczos3 Kernel     │
+│ (High-quality       │
+│  upscaling only)    │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Progressive JPEG    │
+└──────┬──────────────┘
+       │
+       v
+┌──────────┐
+│ Download │
+└──────────┘
+```
+
+#### Image Compression Flow
+```
+┌─────────────┐
+│ User Upload │
+└──────┬──────┘
+       │
+       v
+┌─────────────────────┐
+│ File Validation     │
+│ - Extract metadata  │
+│ - Store orig. size  │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Target Size Slider  │
+│ (with wheel scroll) │
+│ - Set percentage    │
+│ - Show reduction    │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Compress API        │ (/api/compress-image)
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Detect Format       │
+│ JPEG/PNG/WebP       │
+└──────┬──────────────┘
+       │
+       v
+┌─────────────────────┐
+│ Initial Compression │
+│ Quality = 80%       │
+│ ┌────────────────┐  │
+│ │JPEG: MozJPEG + │  │
+│ │  progressive   │  │
+│ │PNG: Level 9 +  │  │
+│ │  palette       │  │
+│ │WebP: 80%       │  │
+│ └────────────────┘  │
+└──────┬──────────────┘
+       │
+       v
+    ┌──┴──┐
+    │  ?  │ Size > Target?
+    └─┬─┬─┘
+      │ │
+    Yes│ │No
+      │ │
+      v │
+  ┌───────┐│
+  │Reduce ││
+  │quality││
+  │by 10% ││
+  └───┬───┘│
+      │    │
+      v    │
+  ┌───────┐│
+  │Retry  ││
+  │(max 10││
+  │times) ││
+  └───┬───┘│
+      │    │
+      └──┬─┘
+         │
+         v
+    ┌─────────┐
+    │ Display │
+    │ Results │
+    │ ┌─────┐ │
+    │ │Orig.│ │
+    │ │Comp.│ │
+    │ │Targ.│ │
+    │ └─────┘ │
+    └────┬────┘
+         │
+         v
+    ┌──────────┐
+    │ Download │
+    └──────────┘
+```
+
 ### Data Flow
 
 #### AI Image Resizing Mode
@@ -636,14 +924,17 @@ graph TD
 
 #### Image Compression Mode
 1. **File Upload**: User uploads image → `useFileUpload` → `/api/upload` → File validation & metadata extraction
-2. **Settings Configuration**: User adjusts quality and target file size sliders → Real-time target size calculation
+2. **Settings Configuration**: User adjusts target file size slider (with wheel scroll support) → Real-time target size calculation
 3. **Compression Processing**: User clicks compress → Compression logic → `/api/compress-image` → Iterative quality adjustment
 4. **Algorithm Execution**:
-   - Initial compression with user-specified quality
+   - Initial compression with optimal quality (80% for JPEG/WebP, level 9 for PNG)
+   - Format-specific compression:
+     - JPEG: MozJPEG with progressive encoding
+     - PNG: Level 9 compression with palette optimization
+     - WebP: 80% quality compression
    - If file size exceeds target: Reduce quality by 10% and retry
    - Repeat up to 10 times or until quality reaches 10% minimum
-   - Format-specific optimization (MozJPEG/PNG/WebP)
-5. **Results Display**: Compressed image preview → Statistics calculation (compression ratio, size reduction)
+5. **Results Display**: Compressed image preview → Shows original size, compressed size, and target size
 6. **Download**: Optimized image → Base64 to blob conversion → Browser download
 
 ## 🚀 Deployment
@@ -762,17 +1053,21 @@ npx tsc --noEmit
 - Preview updates in real-time to show exact crop area
 
 **Upscaling:**
-- Start with smaller scale factors (2x) for best results
+- Minimum scale factor is 1.1x (10% enlargement)
+- Start with smaller scale factors (1.5x-2x) for best results
 - Higher quality settings may significantly increase processing time
 - Batch processing works best with images of similar sizes
+- Target resolution inputs enforce minimum values based on original dimensions
 
 **Image Compression:**
-- Start with moderate quality settings (70-80%) for balanced results
-- Lower target file size percentages require more aggressive compression
+- Quality is automatically optimized - starts at 80% for JPEG/WebP, level 9 for PNG
+- Lower target file size percentages (10-30%) result in more aggressive quality reduction
 - JPEG format typically provides best compression ratios for photos
 - PNG works best for graphics, logos, and images with transparency
 - WebP offers excellent compression for modern web applications
-- If compression ratio seems insufficient, try converting to a different format
+- Use mouse wheel scroll on slider for fine-grained control
+- Algorithm may compress more than expected due to image content
+- If compression ratio seems insufficient, try a lower target percentage
 
 ## 📝 License
 

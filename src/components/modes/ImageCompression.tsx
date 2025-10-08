@@ -1,6 +1,7 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -14,7 +15,6 @@ interface ImageCompressionProps {
 }
 
 export function ImageCompression({}: ImageCompressionProps) {
-  const [quality, setQuality] = useState<number>(80);
   const [maxFileSize, setMaxFileSize] = useState<number>(40); // percentage of original
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressedImage, setCompressedImage] = useState<{
@@ -23,6 +23,8 @@ export function ImageCompression({}: ImageCompressionProps) {
     compressionRatio: number;
   } | null>(null);
   const [compressionError, setCompressionError] = useState<string>('');
+  const [isSliderHovered, setIsSliderHovered] = useState(false);
+  const sliderRef = useRef<HTMLDivElement>(null);
 
   const {
     isUploading,
@@ -52,7 +54,6 @@ export function ImageCompression({}: ImageCompressionProps) {
         },
         body: JSON.stringify({
           imageData: uploadedImage.imageData,
-          quality,
           maxFileSizePercent: maxFileSize,
           originalSize: uploadedImage.size,
         }),
@@ -93,13 +94,34 @@ export function ImageCompression({}: ImageCompressionProps) {
     resetUpload();
     setCompressedImage(null);
     setCompressionError('');
-    setQuality(80);
     setMaxFileSize(40);
   };
 
   const targetSize = uploadedImage
     ? Math.round((uploadedImage.size * maxFileSize) / 100)
     : 0;
+
+  useEffect(() => {
+    const sliderElement = sliderRef.current;
+    if (!sliderElement) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const delta = e.deltaY > 0 ? -5 : 5; // Scroll down = decrease, scroll up = increase
+      const newValue = Math.max(10, Math.min(100, maxFileSize + delta));
+      setMaxFileSize(newValue);
+    };
+
+    if (isSliderHovered) {
+      sliderElement.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    return () => {
+      sliderElement.removeEventListener('wheel', handleWheel);
+    };
+  }, [isSliderHovered, maxFileSize]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -153,43 +175,28 @@ export function ImageCompression({}: ImageCompressionProps) {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-medium text-gray-700">
-                        Max File Size (KB)
+                        Target File Size
                       </label>
                       <span className="text-sm font-semibold bg-gray-100 px-3 py-1 rounded">
                         {maxFileSize}%
                       </span>
                     </div>
-                    <Slider
-                      value={[maxFileSize]}
-                      onValueChange={(value) => setMaxFileSize(value[0])}
-                      min={10}
-                      max={100}
-                      step={5}
-                      className="w-full"
-                    />
+                    <div
+                      ref={sliderRef}
+                      onMouseEnter={() => setIsSliderHovered(true)}
+                      onMouseLeave={() => setIsSliderHovered(false)}
+                    >
+                      <Slider
+                        value={[maxFileSize]}
+                        onValueChange={(value) => setMaxFileSize(value[0])}
+                        min={10}
+                        max={100}
+                        step={5}
+                        className="w-full"
+                      />
+                    </div>
                     <p className="text-xs text-gray-500">
                       Target: {(targetSize / 1024).toFixed(2)} KB
-                    </p>
-                  </div>
-
-                  {/* Quality Slider */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">Quality</label>
-                      <span className="text-sm font-semibold bg-gray-100 px-3 py-1 rounded">
-                        {quality}%
-                      </span>
-                    </div>
-                    <Slider
-                      value={[quality]}
-                      onValueChange={(value) => setQuality(value[0])}
-                      min={1}
-                      max={100}
-                      step={1}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-gray-500">
-                      Higher quality = larger file size
                     </p>
                   </div>
                 </CardContent>
@@ -255,17 +262,14 @@ export function ImageCompression({}: ImageCompressionProps) {
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600">Compressed:</span>
                       <span className="font-semibold text-orange-600">
-                        {(compressedImage.size / 1024).toFixed(2)} KB{' '}
-                        <span className="text-green-600">
-                          ({compressedImage.compressionRatio}%)
-                        </span>
+                        {(compressedImage.size / 1024).toFixed(2)} KB
                       </span>
                     </div>
-                    <div className="pt-2 border-t border-gray-200">
+                    {/* <div className="pt-2 border-t border-gray-200">
                       <p className="text-xs text-gray-500 text-center">
-                        File size reduced by {Math.abs(compressedImage.compressionRatio)}%
+                        Target: {(targetSize / 1024).toFixed(2)} KB
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 )}
               </CardContent>

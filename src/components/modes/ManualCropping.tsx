@@ -608,7 +608,7 @@ export function ManualCropping({}: ManualCroppingProps) {
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-xl font-semibold">
-                        {croppedImageUrl ? 'Comparison' : 'Crop Preview'}
+                        {croppedImageUrl ? 'Preview' : 'Crop Preview'}
                       </CardTitle>
                       {!croppedImageUrl && (
                         <div className="flex items-center gap-2">
@@ -626,42 +626,42 @@ export function ManualCropping({}: ManualCroppingProps) {
                           <p className="text-slate-700 font-medium">Processing your crop...</p>
                         </div>
                       ) : croppedImageUrl ? (
-                        <div className="absolute inset-0 grid grid-cols-2 divide-x divide-slate-300">
-                          {/* Original Image - Full Left Half */}
-                          <div className="relative flex flex-col bg-slate-50">
-                            <div className="absolute top-4 left-0 right-0 z-10">
-                              <h3 className="text-lg font-semibold text-slate-800 text-center">Original</h3>
+                        <div className="absolute inset-0 grid grid-cols-2 gap-6 p-6">
+                          {/* Original Image - Left Half */}
+                          <div className="relative flex flex-col bg-white rounded-lg border border-gray-200 overflow-hidden">
+                            <div className="py-3 border-b border-gray-200">
+                              <h3 className="text-base font-semibold text-gray-900 text-center">Original Image</h3>
                             </div>
-                            <div className="flex-1 relative p-12">
+                            <div className="flex-1 relative bg-gray-50 p-4">
                               <Image
                                 src={`data:image/jpeg;base64,${uploadedImage.imageData}`}
                                 alt="Original image"
                                 fill
-                                className="object-contain p-4"
+                                className="object-contain"
                               />
                             </div>
-                            <div className="absolute bottom-4 left-0 right-0">
-                              <p className="text-sm text-slate-600 text-center font-medium">
+                            <div className="py-3 border-t border-gray-200 bg-white">
+                              <p className="text-sm text-gray-600 text-center">
                                 {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height}
                               </p>
                             </div>
                           </div>
 
-                          {/* Cropped Image - Full Right Half */}
-                          <div className="relative flex flex-col bg-slate-50">
-                            <div className="absolute top-4 left-0 right-0 z-10">
-                              <h3 className="text-lg font-semibold text-slate-800 text-center">Cropped</h3>
+                          {/* Cropped Image - Right Half */}
+                          <div className="relative flex flex-col bg-white rounded-lg border border-gray-200 overflow-hidden">
+                            <div className="py-3 border-b border-gray-200">
+                              <h3 className="text-base font-semibold text-gray-900 text-center">Processed Result</h3>
                             </div>
-                            <div className="flex-1 relative p-12">
+                            <div className="flex-1 relative bg-gray-50 p-4">
                               <Image
                                 src={croppedImageUrl}
                                 alt="Cropped result"
                                 fill
-                                className="object-contain p-4"
+                                className="object-contain"
                               />
                             </div>
-                            <div className="absolute bottom-4 left-0 right-0">
-                              <p className="text-sm text-slate-600 text-center font-medium">
+                            <div className="py-3 border-t border-gray-200 bg-white">
+                              <p className="text-sm text-gray-600 text-center">
                                 {isDimensionSelected
                                   ? `${targetDimensions.width} × ${targetDimensions.height}`
                                   : `${Math.round(cropFrame.width / imageDisplay.scale)} × ${Math.round(cropFrame.height / imageDisplay.scale)}`

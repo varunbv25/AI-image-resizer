@@ -42,28 +42,19 @@ async function upscaleImage(
     throw new Error('Could not determine original image dimensions');
   }
 
-  // Use high-quality resizing algorithms
-  let processedBuffer: Buffer;
-
-  if (targetDimensions.width > originalWidth || targetDimensions.height > originalHeight) {
-    // Upscaling - use Lanczos3 for best quality
-    processedBuffer = await sharp(imageBuffer)
-      .resize(targetDimensions.width, targetDimensions.height, {
-        kernel: 'lanczos3',
-        fit: 'fill'
-      })
-      .jpeg({ quality, progressive: true })
-      .toBuffer();
-  } else {
-    // Downscaling or same size - use Mitchell for good quality
-    processedBuffer = await sharp(imageBuffer)
-      .resize(targetDimensions.width, targetDimensions.height, {
-        kernel: 'mitchell',
-        fit: 'fill'
-      })
-      .jpeg({ quality, progressive: true })
-      .toBuffer();
+  // Validate that we're actually upscaling
+  if (targetDimensions.width < originalWidth || targetDimensions.height < originalHeight) {
+    throw new Error('Target dimensions must be larger than or equal to original dimensions for upscaling');
   }
+
+  // Use Lanczos3 for high-quality upscaling
+  const processedBuffer = await sharp(imageBuffer)
+    .resize(targetDimensions.width, targetDimensions.height, {
+      kernel: 'lanczos3',
+      fit: 'fill'
+    })
+    .jpeg({ quality, progressive: true })
+    .toBuffer();
 
   // Apply output format
   const sharpInstance = sharp(processedBuffer);

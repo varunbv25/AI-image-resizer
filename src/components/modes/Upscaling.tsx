@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -32,6 +32,10 @@ export function Upscaling({ onBack }: UpscalingProps) {
     targetHeight: 1080,
     quality: 0.9,
   });
+  const [isScaleSliderHovered, setIsScaleSliderHovered] = useState(false);
+  const [isQualitySliderHovered, setIsQualitySliderHovered] = useState(false);
+  const scaleSliderRef = useRef<HTMLDivElement>(null);
+  const qualitySliderRef = useRef<HTMLDivElement>(null);
 
   const {
     isUploading,
@@ -70,8 +74,9 @@ export function Upscaling({ onBack }: UpscalingProps) {
       targetWidth = Math.round(uploadedImage.originalDimensions.width * upscaleSettings.scaleFactor);
       targetHeight = Math.round(uploadedImage.originalDimensions.height * upscaleSettings.scaleFactor);
     } else {
-      targetWidth = upscaleSettings.targetWidth;
-      targetHeight = upscaleSettings.targetHeight;
+      // Ensure target dimensions are at least as large as original
+      targetWidth = Math.max(upscaleSettings.targetWidth, uploadedImage.originalDimensions.width);
+      targetHeight = Math.max(upscaleSettings.targetHeight, uploadedImage.originalDimensions.height);
     }
 
     const targetDimensions: ImageDimensions = {
@@ -89,6 +94,50 @@ export function Upscaling({ onBack }: UpscalingProps) {
     if (!upscaledImage) return;
     downloadImage(`upscaled-${uploadedImage?.filename || 'image'}.jpg`);
   };
+
+  useEffect(() => {
+    const scaleElement = scaleSliderRef.current;
+    if (!scaleElement) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const delta = e.deltaY > 0 ? -0.1 : 0.1; // Scroll down = decrease, scroll up = increase
+      const newValue = Math.max(1.1, Math.min(4, upscaleSettings.scaleFactor + delta));
+      setUpscaleSettings(prev => ({ ...prev, scaleFactor: Math.round(newValue * 10) / 10 }));
+    };
+
+    if (isScaleSliderHovered) {
+      scaleElement.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    return () => {
+      scaleElement.removeEventListener('wheel', handleWheel);
+    };
+  }, [isScaleSliderHovered, upscaleSettings.scaleFactor]);
+
+  useEffect(() => {
+    const qualityElement = qualitySliderRef.current;
+    if (!qualityElement) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const delta = e.deltaY > 0 ? -0.05 : 0.05; // Scroll down = decrease, scroll up = increase
+      const newValue = Math.max(0.5, Math.min(1, upscaleSettings.quality + delta));
+      setUpscaleSettings(prev => ({ ...prev, quality: Math.round(newValue * 100) / 100 }));
+    };
+
+    if (isQualitySliderHovered) {
+      qualityElement.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    return () => {
+      qualityElement.removeEventListener('wheel', handleWheel);
+    };
+  }, [isQualitySliderHovered, upscaleSettings.quality]);
 
 
   return (
@@ -183,18 +232,24 @@ export function Upscaling({ onBack }: UpscalingProps) {
                       <label className="block text-sm font-medium mb-2">
                         Scale Factor: {upscaleSettings.scaleFactor}x
                       </label>
-                      <Slider
-                        value={[upscaleSettings.scaleFactor]}
-                        onValueChange={(value) =>
-                          setUpscaleSettings(prev => ({ ...prev, scaleFactor: value[0] }))
-                        }
-                        min={1}
-                        max={4}
-                        step={0.1}
-                        className="w-full"
-                      />
+                      <div
+                        ref={scaleSliderRef}
+                        onMouseEnter={() => setIsScaleSliderHovered(true)}
+                        onMouseLeave={() => setIsScaleSliderHovered(false)}
+                      >
+                        <Slider
+                          value={[upscaleSettings.scaleFactor]}
+                          onValueChange={(value) =>
+                            setUpscaleSettings(prev => ({ ...prev, scaleFactor: value[0] }))
+                          }
+                          min={1.1}
+                          max={4}
+                          step={0.1}
+                          className="w-full"
+                        />
+                      </div>
                       <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>1x</span>
+                        <span>1.1x</span>
                         <span>4x</span>
                       </div>
                       {uploadedImage && (
@@ -210,28 +265,44 @@ export function Upscaling({ onBack }: UpscalingProps) {
                         <input
                           type="number"
                           value={upscaleSettings.targetWidth}
-                          onChange={(e) =>
+                          min={uploadedImage?.originalDimensions.width || 0}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            const minWidth = uploadedImage?.originalDimensions.width || 0;
                             setUpscaleSettings(prev => ({
                               ...prev,
-                              targetWidth: parseInt(e.target.value) || 0
-                            }))
-                          }
+                              targetWidth: Math.max(value, minWidth)
+                            }));
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
+                        {uploadedImage && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Min: {uploadedImage.originalDimensions.width}px
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">Height</label>
                         <input
                           type="number"
                           value={upscaleSettings.targetHeight}
-                          onChange={(e) =>
+                          min={uploadedImage?.originalDimensions.height || 0}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 0;
+                            const minHeight = uploadedImage?.originalDimensions.height || 0;
                             setUpscaleSettings(prev => ({
                               ...prev,
-                              targetHeight: parseInt(e.target.value) || 0
-                            }))
-                          }
+                              targetHeight: Math.max(value, minHeight)
+                            }));
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
+                        {uploadedImage && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Min: {uploadedImage.originalDimensions.height}px
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -240,16 +311,22 @@ export function Upscaling({ onBack }: UpscalingProps) {
                     <label className="block text-sm font-medium mb-2">
                       Quality: {Math.round(upscaleSettings.quality * 100)}%
                     </label>
-                    <Slider
-                      value={[upscaleSettings.quality]}
-                      onValueChange={(value) =>
-                        setUpscaleSettings(prev => ({ ...prev, quality: value[0] }))
-                      }
-                      min={0.5}
-                      max={1}
-                      step={0.05}
-                      className="w-full"
-                    />
+                    <div
+                      ref={qualitySliderRef}
+                      onMouseEnter={() => setIsQualitySliderHovered(true)}
+                      onMouseLeave={() => setIsQualitySliderHovered(false)}
+                    >
+                      <Slider
+                        value={[upscaleSettings.quality]}
+                        onValueChange={(value) =>
+                          setUpscaleSettings(prev => ({ ...prev, quality: value[0] }))
+                        }
+                        min={0.5}
+                        max={1}
+                        step={0.05}
+                        className="w-full"
+                      />
+                    </div>
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
                       <span>50%</span>
                       <span>100%</span>
