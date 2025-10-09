@@ -3,10 +3,8 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb'
-    }
+  devIndicators: {
+    appIsrIndicator: false
   },
   experimental: {
     serverActions: {

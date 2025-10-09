@@ -50,7 +50,7 @@ async function compressImage(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageData, maxFileSizePercent, originalSize } = body;
+    const { imageData, maxFileSizePercent, maxFileSizeKB, quality: userQuality, originalSize } = body;
 
     if (!imageData) {
       throw new Error('No image data provided');
@@ -68,21 +68,52 @@ export async function POST(req: NextRequest) {
     }).metadata();
     const format = metadata.format || 'jpeg';
 
-    // Target size in bytes
-    const targetSize = (originalSize * maxFileSizePercent) / 100;
+    let compressedBuffer: Buffer;
+    let currentQuality: number;
 
-    // Initial compression attempt with optimal quality settings
-    let currentQuality = 80; // Start with 80 for JPEG/WebP
-    let compressedBuffer = await compressImage(buffer, format, currentQuality);
-
-    // If compressed size is still larger than target, reduce quality iteratively
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
-      currentQuality = Math.max(10, currentQuality - 10);
+    // Mode 1: User specified quality
+    if (userQuality !== undefined && userQuality !== null) {
+      currentQuality = userQuality;
       compressedBuffer = await compressImage(buffer, format, currentQuality);
-      attempts++;
+    }
+    // Mode 2: Target file size in KB
+    else if (maxFileSizeKB !== undefined && maxFileSizeKB !== null) {
+      const targetSize = maxFileSizeKB * 1024; // Convert KB to bytes
+
+      // Initial compression attempt
+      currentQuality = 80;
+      compressedBuffer = await compressImage(buffer, format, currentQuality);
+
+      // Iteratively reduce quality to reach target size
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
+        currentQuality = Math.max(10, currentQuality - 10);
+        compressedBuffer = await compressImage(buffer, format, currentQuality);
+        attempts++;
+      }
+    }
+    // Mode 3: Target size as percentage (legacy support)
+    else if (maxFileSizePercent !== undefined && maxFileSizePercent !== null) {
+      const targetSize = (originalSize * maxFileSizePercent) / 100;
+
+      currentQuality = 80;
+      compressedBuffer = await compressImage(buffer, format, currentQuality);
+
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
+        currentQuality = Math.max(10, currentQuality - 10);
+        compressedBuffer = await compressImage(buffer, format, currentQuality);
+        attempts++;
+      }
+    }
+    // Fallback
+    else {
+      currentQuality = 80;
+      compressedBuffer = await compressImage(buffer, format, currentQuality);
     }
 
     // Calculate compression ratio

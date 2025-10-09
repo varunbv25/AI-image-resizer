@@ -157,7 +157,7 @@ function HomeContent() {
                   <FileArchive className="w-8 h-8 text-orange-600" />
                 </div>
                 <CardTitle className="text-xl font-bold text-gray-900">
-                  Image Compression
+                  Compression
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-center flex flex-col flex-grow">
