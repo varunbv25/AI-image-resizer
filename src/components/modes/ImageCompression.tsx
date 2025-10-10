@@ -7,11 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
+import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { Download, RotateCcw, FileArchive } from 'lucide-react';
+import JSZip from 'jszip';
 
 interface ImageCompressionProps {
   onBack: () => void;
+}
+
+interface CompressionSettings {
+  compressionMode: 'quality' | 'filesize';
+  quality: number;
+  maxFileSize: number;
+  maxFileSizeKB: number;
 }
 
 export function ImageCompression({}: ImageCompressionProps) {
@@ -30,6 +39,15 @@ export function ImageCompression({}: ImageCompressionProps) {
   const [comparisonPosition, setComparisonPosition] = useState<number>(50);
   const [isComparing, setIsComparing] = useState(false);
   const [imageBounds, setImageBounds] = useState<{ left: number; right: number } | null>(null);
+
+  // Batch processing state
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+  const [totalProcessed, setTotalProcessed] = useState(0);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [batchProcessingStarted, setBatchProcessingStarted] = useState(false);
+
   const sliderRef = useRef<HTMLDivElement>(null);
   const comparisonRef = useRef<HTMLDivElement>(null);
   const originalImageRef = useRef<HTMLImageElement>(null);
@@ -46,6 +64,219 @@ export function ImageCompression({}: ImageCompressionProps) {
     uploadFile(file);
     setCompressedImage(null);
     setCompressionError('');
+    setIsBatchMode(false);
+  };
+
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const handleBatchImageUpload = async (files: File[]) => {
+    setIsBatchMode(true);
+    setTotalProcessed(0);
+    setBatchProcessingStarted(false);
+
+    // Store uploaded files
+    setUploadedFiles(files);
+
+    // Create initial batch items with preview URLs and get dimensions
+    const itemsPromises = files.map(async (file, index) => {
+      const dimensions = await getImageDimensions(file);
+      const settings: CompressionSettings = {
+        compressionMode: compressionMode,
+        quality: quality,
+        maxFileSize: maxFileSize,
+        maxFileSizeKB: Math.round((file.size / 1024) * 0.8), // Default to 80% of original
+      };
+      return {
+        id: `${Date.now()}-${index}`,
+        filename: file.name,
+        status: 'pending' as const,
+        originalSize: file.size,
+        previewUrl: URL.createObjectURL(file),
+        originalDimensions: dimensions,
+        settings: settings as unknown as Record<string, unknown>,
+      };
+    });
+
+    const items = await Promise.all(itemsPromises);
+    setBatchItems(items);
+  };
+
+  const processAllImages = async () => {
+    setBatchProcessingStarted(true);
+    setTotalProcessed(0);
+
+    // Process each file sequentially
+    for (let i = 0; i < uploadedFiles.length; i++) {
+      const file = uploadedFiles[i];
+      const item = batchItems[i];
+      const itemId = item.id;
+
+      // Get settings with defaults
+      const defaultSettings: CompressionSettings = {
+        compressionMode,
+        quality,
+        maxFileSize,
+        maxFileSizeKB
+      };
+      const settings = (item.settings as unknown as CompressionSettings) || defaultSettings;
+
+      // Update status to processing
+      setBatchItems(prev => prev.map(item =>
+        item.id === itemId ? { ...item, status: 'processing' as const } : item
+      ));
+
+      try {
+        // Read file as base64
+        const base64 = await fileToBase64(file);
+
+        // Compress image
+        const response = await fetch('/api/compress-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageData: base64,
+            maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
+            maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
+            quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
+            originalSize: file.size,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'Compression failed');
+        }
+
+        // Update item with success
+        setBatchItems(prev => prev.map(item =>
+          item.id === itemId
+            ? {
+                ...item,
+                status: 'completed' as const,
+                processedSize: result.data.size,
+                processedData: result.data.imageData,
+              }
+            : item
+        ));
+
+        setTotalProcessed(prev => prev + 1);
+      } catch (error) {
+        // Update item with error
+        setBatchItems(prev => prev.map(item =>
+          item.id === itemId
+            ? {
+                ...item,
+                status: 'error' as const,
+                error: error instanceof Error ? error.message : 'Compression failed',
+              }
+            : item
+        ));
+
+        setTotalProcessed(prev => prev + 1);
+      }
+    }
+  };
+
+  const processSingleImage = async (id: string) => {
+    const itemIndex = batchItems.findIndex(item => item.id === id);
+    if (itemIndex === -1) return;
+
+    const file = uploadedFiles[itemIndex];
+    const item = batchItems[itemIndex];
+
+    // Get settings with defaults
+    const defaultSettings: CompressionSettings = {
+      compressionMode,
+      quality,
+      maxFileSize,
+      maxFileSizeKB
+    };
+    const settings = (item.settings as unknown as CompressionSettings) || defaultSettings;
+
+    // Update status to processing
+    setBatchItems(prev => prev.map(item =>
+      item.id === id ? { ...item, status: 'processing' as const } : item
+    ));
+
+    try {
+      // Read file as base64
+      const base64 = await fileToBase64(file);
+
+      // Compress image
+      const response = await fetch('/api/compress-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageData: base64,
+          maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
+          maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
+          quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
+          originalSize: file.size,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Compression failed');
+      }
+
+      // Update item with success
+      setBatchItems(prev => prev.map(item =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'completed' as const,
+              processedSize: result.data.size,
+              processedData: result.data.imageData,
+            }
+          : item
+      ));
+
+      setTotalProcessed(prev => prev + 1);
+    } catch (error) {
+      // Update item with error
+      setBatchItems(prev => prev.map(item =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'error' as const,
+              error: error instanceof Error ? error.message : 'Compression failed',
+            }
+          : item
+      ));
+
+      setTotalProcessed(prev => prev + 1);
+    }
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
 
   // Update maxFileSizeKB when image is uploaded
@@ -126,6 +357,27 @@ export function ImageCompression({}: ImageCompressionProps) {
     return Math.max(imageBounds.left, Math.min(imageBounds.right, percentage));
   };
 
+  const updateImageSettings = (id: string, newSettings: Partial<CompressionSettings>) => {
+    setBatchItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const currentSettings = (item.settings as unknown as CompressionSettings) || {
+          compressionMode,
+          quality,
+          maxFileSize,
+          maxFileSizeKB
+        };
+        return {
+          ...item,
+          settings: {
+            ...currentSettings,
+            ...newSettings,
+          } as unknown as Record<string, unknown>,
+        };
+      }
+      return item;
+    }));
+  };
+
   const handleCompress = async () => {
     if (!uploadedImage) return;
 
@@ -187,6 +439,45 @@ export function ImageCompression({}: ImageCompressionProps) {
     setMaxFileSizeKB(500);
     setCompressionMode('quality');
     setComparisonPosition(50);
+    setIsBatchMode(false);
+    setBatchItems([]);
+    setTotalProcessed(0);
+    setUploadedFiles([]);
+    setSelectedImageId(null);
+    setBatchProcessingStarted(false);
+  };
+
+  const handleDownloadAll = async () => {
+    const completedItems = batchItems.filter(item => item.status === 'completed' && item.processedData);
+
+    if (completedItems.length === 0) return;
+
+    const zip = new JSZip();
+
+    completedItems.forEach((item) => {
+      const base64Data = item.processedData!.replace(/^data:image\/\w+;base64,/, '');
+      zip.file(item.filename, base64Data, { base64: true });
+    });
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(content);
+    link.download = `compressed-images-${Date.now()}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadSingle = (id: string) => {
+    const item = batchItems.find(item => item.id === id);
+    if (!item || !item.processedData) return;
+
+    const link = document.createElement('a');
+    link.href = item.processedData;
+    link.download = `compressed-${item.filename}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const targetSize = uploadedImage
@@ -238,9 +529,272 @@ export function ImageCompression({}: ImageCompressionProps) {
         </p>
       </header>
 
-      {!uploadedImage ? (
+      {!uploadedImage && !isBatchMode ? (
         <div className="max-w-2xl mx-auto">
-          <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
+          <ImageUploader
+            onImageUpload={handleImageUpload}
+            onBatchImageUpload={handleBatchImageUpload}
+            isUploading={isUploading}
+            supportsBatch={true}
+          />
+        </div>
+      ) : isBatchMode ? (
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Default Compression Settings - Show when no image is selected */}
+          {!batchProcessingStarted && !selectedImageId && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Default Compression Settings (applies to all images)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Mode Toggle */}
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-gray-700">
+                    Compression Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={compressionMode === 'quality' ? 'default' : 'outline'}
+                      onClick={() => setCompressionMode('quality')}
+                      className="w-full"
+                    >
+                      Quality
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={compressionMode === 'filesize' ? 'default' : 'outline'}
+                      onClick={() => setCompressionMode('filesize')}
+                      className="w-full"
+                    >
+                      Max File Size
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Quality Slider */}
+                {compressionMode === 'quality' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-gray-700">
+                        Quality
+                      </label>
+                      <span className="text-sm font-semibold bg-gray-100 px-3 py-1 rounded">
+                        {quality}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[quality]}
+                      onValueChange={(value) => setQuality(value[0])}
+                      min={1}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-gray-500 text-center">
+                      {100 - quality}% compression
+                    </p>
+                  </div>
+                )}
+
+                {/* Max File Size Slider */}
+                {compressionMode === 'filesize' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-gray-700">
+                        Max Target Size (KB)
+                      </label>
+                      <span className="text-sm font-semibold bg-gray-100 px-3 py-1 rounded">
+                        {maxFileSizeKB} KB
+                      </span>
+                    </div>
+                    <Slider
+                      value={[maxFileSizeKB]}
+                      onValueChange={(value) => setMaxFileSizeKB(value[0])}
+                      min={50}
+                      max={5000}
+                      step={50}
+                      className="w-full"
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Grid Layout: Batch List and Selected Image Settings */}
+          <div className={`grid ${selectedImageId && !batchProcessingStarted ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-6`}>
+            <BatchProcessor
+              items={batchItems}
+              onDownloadAll={handleDownloadAll}
+              onDownloadSingle={handleDownloadSingle}
+              onProcessSingle={processSingleImage}
+              totalProcessed={totalProcessed}
+              totalItems={batchItems.length}
+              processingStarted={batchProcessingStarted}
+              selectedId={selectedImageId}
+              onSelectImage={setSelectedImageId}
+            />
+
+            {/* Selected Image Settings Panel */}
+            {selectedImageId && !batchProcessingStarted && (() => {
+              const selectedItem = batchItems.find(item => item.id === selectedImageId);
+              if (!selectedItem || !selectedItem.settings) return null;
+
+              const itemSettings = selectedItem.settings as unknown as CompressionSettings;
+
+              return (
+                <div className="space-y-4">
+                  {/* Image Preview Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="truncate">{selectedItem.filename}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedImageId(null)}
+                        >
+                          ✕
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-2">
+                        <img
+                          src={selectedItem.previewUrl}
+                          alt={selectedItem.filename}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {selectedItem.originalDimensions?.width} × {selectedItem.originalDimensions?.height} •{' '}
+                        {Math.round(selectedItem.originalSize / 1024)} KB
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Individual Settings Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Individual Compression Settings</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* Mode Toggle */}
+                      <div className="space-y-3">
+                        <label className="text-sm font-medium text-gray-700">
+                          Compression Mode
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant={itemSettings.compressionMode === 'quality' ? 'default' : 'outline'}
+                            onClick={() => updateImageSettings(selectedImageId, { compressionMode: 'quality' })}
+                            className="w-full"
+                          >
+                            Quality
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={itemSettings.compressionMode === 'filesize' ? 'default' : 'outline'}
+                            onClick={() => updateImageSettings(selectedImageId, { compressionMode: 'filesize' })}
+                            className="w-full"
+                          >
+                            Max File Size
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Quality Slider */}
+                      {itemSettings.compressionMode === 'quality' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-gray-700">
+                              Quality
+                            </label>
+                            <span className="text-sm font-semibold bg-gray-100 px-3 py-1 rounded">
+                              {itemSettings.quality}%
+                            </span>
+                          </div>
+                          <Slider
+                            value={[itemSettings.quality]}
+                            onValueChange={(value) => updateImageSettings(selectedImageId, { quality: value[0] })}
+                            min={1}
+                            max={100}
+                            step={1}
+                            className="w-full"
+                          />
+                          <p className="text-xs text-gray-500 text-center">
+                            {100 - itemSettings.quality}% compression
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Max File Size Slider */}
+                      {itemSettings.compressionMode === 'filesize' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-gray-700">
+                              Max Target Size (KB)
+                            </label>
+                            <span className="text-sm font-semibold bg-gray-100 px-3 py-1 rounded">
+                              {itemSettings.maxFileSizeKB} KB
+                            </span>
+                          </div>
+                          <Slider
+                            value={[itemSettings.maxFileSizeKB]}
+                            onValueChange={(value) => updateImageSettings(selectedImageId, { maxFileSizeKB: value[0] })}
+                            min={50}
+                            max={Math.round(selectedItem.originalSize / 1024)}
+                            step={50}
+                            className="w-full"
+                          />
+                          <p className="text-xs text-gray-500 text-center">
+                            {itemSettings.maxFileSizeKB < (selectedItem.originalSize / 1024)
+                              ? `${Math.round((1 - (itemSettings.maxFileSizeKB / (selectedItem.originalSize / 1024))) * 100)}% compression`
+                              : 'No compression needed'}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Process This Image Button */}
+                      {selectedItem.status === 'pending' && (
+                        <Button
+                          onClick={() => processSingleImage(selectedImageId)}
+                          className="w-full bg-orange-600 hover:bg-orange-700"
+                        >
+                          Compress This Image
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-center gap-4">
+            {!batchProcessingStarted && batchItems.length > 0 && (
+              <Button
+                onClick={processAllImages}
+                className="bg-orange-600 hover:bg-orange-700 gap-2"
+                size="lg"
+              >
+                <FileArchive className="h-5 w-5" />
+                Compress All Images ({batchItems.length})
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              className="gap-2"
+              size="lg"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {batchProcessingStarted ? 'Process More Images' : 'Cancel'}
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -257,10 +811,10 @@ export function ImageCompression({}: ImageCompressionProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600">{uploadedImage.filename}</p>
+                  <p className="text-sm text-gray-600">{uploadedImage?.filename}</p>
                   <p className="text-xs text-gray-500">
-                    {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height} •{' '}
-                    {(uploadedImage.size / (1024 * 1024)).toFixed(2)} MB
+                    {uploadedImage?.originalDimensions.width} × {uploadedImage?.originalDimensions.height} •{' '}
+                    {((uploadedImage?.size || 0) / (1024 * 1024)).toFixed(2)} MB
                   </p>
                 </CardContent>
               </Card>
@@ -459,12 +1013,14 @@ export function ImageCompression({}: ImageCompressionProps) {
                         : 'none'
                     }}
                   >
-                    <img
-                      ref={originalImageRef}
-                      src={`data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`}
-                      alt="Original"
-                      className="w-full h-full object-contain"
-                    />
+                    {uploadedImage && (
+                      <img
+                        ref={originalImageRef}
+                        src={`data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`}
+                        alt="Original"
+                        className="w-full h-full object-contain"
+                      />
+                    )}
                   </div>
 
                   {/* Comparison Slider */}
@@ -485,17 +1041,21 @@ export function ImageCompression({}: ImageCompressionProps) {
                       </div>
 
                       {/* Labels */}
-                      <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                        Original: {(uploadedImage.size / 1024).toFixed(2)} KB
-                      </div>
-                      <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                        Compressed: {(compressedImage.size / 1024).toFixed(2)} KB (-{Math.round((1 - compressedImage.size / uploadedImage.size) * 100)}%)
-                      </div>
+                      {uploadedImage && (
+                        <>
+                          <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            Original: {(uploadedImage.size / 1024).toFixed(2)} KB
+                          </div>
+                          <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                            Compressed: {(compressedImage.size / 1024).toFixed(2)} KB (-{Math.round((1 - compressedImage.size / uploadedImage.size) * 100)}%)
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
 
-                {compressedImage && (
+                {compressedImage && uploadedImage && (
                   <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-600">Original:</span>

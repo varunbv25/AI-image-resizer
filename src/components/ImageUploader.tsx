@@ -8,18 +8,24 @@ import { Upload, Image as ImageIcon } from 'lucide-react';
 
 interface ImageUploaderProps {
   onImageUpload: (file: File) => void;
+  onBatchImageUpload?: (files: File[]) => void;
   isUploading: boolean;
+  supportsBatch?: boolean;
 }
 
-export function ImageUploader({ onImageUpload, isUploading }: ImageUploaderProps) {
+export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, supportsBatch = false }: ImageUploaderProps) {
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       if (acceptedFiles.length > 0) {
-        onImageUpload(acceptedFiles[0]);
+        if (supportsBatch && acceptedFiles.length > 1 && onBatchImageUpload) {
+          onBatchImageUpload(acceptedFiles);
+        } else {
+          onImageUpload(acceptedFiles[0]);
+        }
       }
     },
-    [onImageUpload]
+    [onImageUpload, onBatchImageUpload, supportsBatch]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -29,7 +35,7 @@ export function ImageUploader({ onImageUpload, isUploading }: ImageUploaderProps
       'image/png': ['.png'],
       'image/webp': ['.webp'],
     },
-    multiple: false,
+    multiple: supportsBatch,
     disabled: isUploading,
   });
 
@@ -55,10 +61,10 @@ export function ImageUploader({ onImageUpload, isUploading }: ImageUploaderProps
 
           <div className="space-y-3 text-center">
             <h3 className="text-xl font-medium text-gray-700">
-              {isUploading ? 'Uploading...' : 'Drag and drop an image or browse'}
+              {isUploading ? 'Uploading...' : supportsBatch ? 'Drag and drop images or browse' : 'Drag and drop an image or browse'}
             </h3>
             <p className="text-sm text-gray-500">
-              Supports JPEG, PNG and WebP
+              Supports JPEG, PNG and WebP{supportsBatch && ' • Multiple files supported'}
             </p>
           </div>
 
