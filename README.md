@@ -87,6 +87,119 @@ A comprehensive image processing platform offering four powerful modes: AI-power
   - Space: Apply crop
   - Ctrl+R: Reset
 
+## 🧮 Processing Algorithms
+
+### AI Image Resizing Algorithms
+
+#### Primary Method: AI-Powered Extension
+- **Model**: Google Gemini 2.5 Flash Image Preview
+- **Technique**: Generative AI background extension
+- **Process**:
+  1. Sends original image with target dimensions to Gemini AI
+  2. AI model analyzes image content, style, colors, lighting, and textures
+  3. Generates seamless background extension matching original image characteristics
+  4. Validates output against target dimensions
+  5. Crops to exact dimensions if needed using center-crop algorithm
+
+#### Fallback Method: Edge Color Detection
+- **Library**: Sharp.js
+- **Algorithm**: Statistical edge sampling with weighted averaging
+- **Process**:
+  1. **Edge Sampling**: Extracts pixel data from all four edges (top, bottom, left, right)
+     - Edge thickness: 3% of smallest dimension (min 3px, max 15px)
+     - Samples full width/height of each edge
+  2. **Color Analysis**: Calculates mean RGB values for each edge using Sharp.js `.stats()` method
+  3. **Weighted Averaging**:
+     - Top and bottom edges: 1.5x weight (more representative)
+     - Left and right edges: 1.0x weight
+     - Formula: `RGB = Σ(edge_color × weight) / total_weight`
+  4. **Canvas Creation**: Creates new canvas with detected background color
+  5. **Image Compositing**: Centers original image on canvas using Sharp.js `.composite()`
+  6. **Final Resize**: Ensures exact target dimensions with `.resize(fit: 'fill')`
+
+### Manual Cropping Algorithm
+
+- **Library**: Sharp.js
+- **Method**: High-precision region extraction
+- **Process**:
+  1. **Scale Calculation**: Determines optimal scale to cover target area
+     - `scale = max(targetWidth/originalWidth, targetHeight/originalHeight)`
+  2. **Resize**: Scales image using calculated factor
+  3. **Extract**: Uses Sharp.js `.extract()` method for pixel-perfect cropping
+     - Calculates center position: `(scaledDimension - targetDimension) / 2`
+     - Extracts exact region with specified x, y, width, height
+  4. **Quality Preservation**: Maintains high quality (85-90%) during crop operation
+
+### Upscaling Algorithm
+
+- **Library**: Sharp.js
+- **Resampling Kernel**: Lanczos3
+- **Method**: High-quality interpolation-based upscaling
+- **Process**:
+  1. **Validation**: Ensures target dimensions ≥ original dimensions
+  2. **Lanczos3 Resampling**:
+     - Uses 3-lobe Lanczos windowed sinc filter
+     - Kernel size: 6×6 pixel neighborhood
+     - Provides superior edge preservation and sharpness
+     - Optimal for photographic content and detail retention
+  3. **Progressive Encoding**:
+     - JPEG: Progressive scan encoding for web optimization
+     - Multiple scan passes for faster perceived loading
+  4. **Format Optimization**:
+     - JPEG: Progressive encoding with configurable quality
+     - PNG: Lossless with quality settings
+     - WebP: Modern compression with quality control
+
+**Algorithm Characteristics**:
+- **Type**: Bicubic interpolation with windowed sinc function
+- **Quality**: Superior to bilinear/bicubic for upscaling
+- **Edge Handling**: Excellent sharpness preservation
+- **Performance**: Optimized C++ implementation via Sharp.js
+
+### Image Compression Algorithms
+
+- **Library**: Sharp.js
+- **Strategy**: Iterative quality reduction with format-specific optimization
+
+#### Compression Process
+1. **Initial Compression**:
+   - Starting quality: 80% (JPEG/WebP) or level 9 (PNG)
+   - Format-specific encoder selection
+2. **Iterative Optimization**:
+   - Compares output size to target size
+   - If size > target: reduces quality by 10% and recompresses
+   - Maximum attempts: 10 iterations
+   - Minimum quality threshold: 10%
+3. **Algorithm**: Binary search-like approach with fixed decrements
+   - `quality_n = max(10, quality_{n-1} - 10)`
+   - Stops when: `outputSize ≤ targetSize` OR `quality ≤ 10` OR `attempts ≥ 10`
+
+#### Format-Specific Algorithms
+
+**JPEG Compression:**
+- **Encoder**: MozJPEG
+- **Method**: Optimized JPEG encoding with trellis quantization
+- **Features**:
+  - Progressive scan encoding for better web loading
+  - Optimized Huffman tables
+  - Trellis quantization for better quality/size ratio
+- **Settings**: Quality 10-80, progressive: true
+
+**PNG Compression:**
+- **Method**: DEFLATE compression with palette optimization
+- **Settings**:
+  - Compression level: 9 (maximum)
+  - Palette: true (enables palette optimization for smaller file sizes)
+- **Algorithm**: Lossless compression with optimal filtering
+- **Note**: Quality parameter affects filtering, not lossy compression
+
+**WebP Compression:**
+- **Method**: VP8/VP8L compression
+- **Type**: Lossy compression (for quality < 100)
+- **Settings**: Quality 10-80
+- **Algorithm**: Block-based prediction with transform coding
+- **Advantages**: Better compression than JPEG at equivalent quality
+
 ## 🛠 Technology Stack
 
 ### Frontend
@@ -98,10 +211,10 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 
 ### Backend & Processing
 - **Next.js API Routes**: Serverless API endpoints for all processing modes
-- **Sharp.js**: High-performance image processing and manipulation
+- **Sharp.js**: High-performance image processing library (libvips-based)
 - **Formidable**: Multipart form data parsing for file uploads
-- **Google Gemini AI**: Advanced AI model for intelligent image extension
-- **Custom Processing Algorithms**: Edge detection and upscaling implementations
+- **Google Gemini AI**: Gemini 2.5 Flash Image model for intelligent canvas extension
+- **Custom Processing Algorithms**: Edge detection, color sampling, and iterative compression
 
 ### UI Components & Libraries
 - **Radix UI**: Accessible, unstyled UI primitives (Dialog, Progress, Select, Slider, Tabs)
