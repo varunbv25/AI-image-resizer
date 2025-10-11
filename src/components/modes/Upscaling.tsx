@@ -12,7 +12,7 @@ import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useUpscaling } from '@/hooks/useUpscaling';
 import { ImageDimensions } from '@/types';
-import { Download, RotateCcw, Maximize, Settings } from 'lucide-react';
+import { Download, RotateCcw, Maximize, Settings, Info, Check, Clock, AlertCircle } from 'lucide-react';
 import JSZip from 'jszip';
 interface UpscalingProps {
   onBack: () => void;
@@ -336,7 +336,7 @@ export function Upscaling({ onBack }: UpscalingProps) {
 
   const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
+      const img = new window.Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
         resolve({ width: img.width, height: img.height });
@@ -713,26 +713,101 @@ export function Upscaling({ onBack }: UpscalingProps) {
             </Card>
           )}
 
-          {/* Grid Layout: Batch List and Selected Image Settings */}
-          <div className={`grid ${selectedImageId && !batchProcessingStarted ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-6`}>
-            <BatchProcessor
-              items={batchItems}
-              onDownloadAll={handleDownloadAll}
-              onDownloadSingle={handleDownloadSingle}
-              onProcessSingle={processSingleImage}
-              totalProcessed={totalProcessed}
-              totalItems={batchItems.length}
-              processingStarted={batchProcessingStarted}
-              selectedId={selectedImageId}
-              onSelectImage={setSelectedImageId}
-            />
+          {/* Instructions Banner */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-900">
+                  <strong>How to use:</strong> Click any image below to customize its upscaling settings, then click &quot;Process This Image&quot;. Or click &quot;Process All Images&quot; to use default settings for all pending images.
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Selected Image Settings Panel */}
-            {selectedImageId && !batchProcessingStarted && (() => {
-              const selectedItem = batchItems.find(item => item.id === selectedImageId);
-              if (!selectedItem || !selectedItem.settings) return null;
+          {/* Grid Layout: Sidebar and Main Content */}
+          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Sidebar - Image List */}
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Images ({batchItems.length})</span>
+                    <Button variant="outline" size="sm" onClick={handleReset}>
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                    {batchItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedImageId(item.id)}
+                        className={`w-full p-3 rounded-lg border-2 transition-all ${
+                          selectedImageId === item.id
+                            ? 'border-purple-500 bg-purple-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={item.previewUrl}
+                            alt={item.filename}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                          <div className="flex-1 text-left">
+                            <p className="text-sm font-medium text-gray-900 truncate">{item.filename}</p>
+                            <p className="text-xs text-gray-500">
+                              {item.originalDimensions?.width} × {item.originalDimensions?.height}
+                            </p>
+                            <div className="flex items-center gap-1 mt-1">
+                              {item.status === 'pending' && <Clock className="w-3 h-3 text-gray-400" />}
+                              {item.status === 'processing' && (
+                                <div className="animate-spin rounded-full h-3 w-3 border-2 border-purple-500 border-t-transparent" />
+                              )}
+                              {item.status === 'completed' && <Check className="w-3 h-3 text-green-500" />}
+                              {item.status === 'error' && <AlertCircle className="w-3 h-3 text-red-500" />}
+                              <span className="text-xs text-gray-600 capitalize">{item.status}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
 
-              const itemSettings = selectedItem.settings as unknown as UpscaleSettings;
+                  <div className="mt-4 space-y-2">
+                    {!batchProcessingStarted && batchItems.some(i => i.status === 'pending') && (
+                      <Button
+                        onClick={processAllImages}
+                        className="w-full bg-purple-600 hover:bg-purple-700"
+                      >
+                        <Maximize className="h-4 w-4 mr-2" />
+                        Process All Images ({batchItems.filter(i => i.status === 'pending').length})
+                      </Button>
+                    )}
+                    {batchItems.some(i => i.status === 'completed') && (
+                      <Button
+                        onClick={handleDownloadAll}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download All ({batchItems.filter(i => i.status === 'completed').length})
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Content - Selected Image Settings */}
+            <div className="lg:col-span-2">
+              {selectedImageId && (() => {
+                const selectedItem = batchItems.find(item => item.id === selectedImageId);
+                if (!selectedItem || !selectedItem.settings) return null;
+
+                const itemSettings = selectedItem.settings as unknown as UpscaleSettings;
 
               return (
                 <div className="space-y-4">
@@ -909,34 +984,34 @@ export function Upscaling({ onBack }: UpscalingProps) {
                           Process This Image
                         </Button>
                       )}
+                      {selectedItem.status === 'completed' && selectedItem.processedData && (
+                        <Button
+                          onClick={() => handleDownloadSingle(selectedImageId)}
+                          variant="outline"
+                          className="w-full"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                      )}
+                      {selectedItem.status === 'error' && (
+                        <div className="bg-red-50 border border-red-200 rounded p-2">
+                          <p className="text-xs text-red-600">{selectedItem.error}</p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
               );
-            })()}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-center gap-4">
-            {!batchProcessingStarted && batchItems.length > 0 && (
-              <Button
-                onClick={processAllImages}
-                className="bg-purple-600 hover:bg-purple-700 gap-2"
-                size="lg"
-              >
-                <Maximize className="h-5 w-5" />
-                Process All Images ({batchItems.length})
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={handleReset}
-              className="gap-2"
-              size="lg"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {batchProcessingStarted ? 'Process More Images' : 'Cancel'}
-            </Button>
+              })() || (
+                <Card>
+                  <CardContent className="py-20 text-center">
+                    <Maximize className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">Select an image from the list to configure and process it</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
       ) : (

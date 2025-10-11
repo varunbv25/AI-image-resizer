@@ -9,8 +9,10 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { DimensionSelector } from '@/components/DimensionSelector';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { ImageDimensions } from '@/types';
-import { Download, RotateCcw, Scissors, ZoomIn, Move, Keyboard} from 'lucide-react';
+import { Download, RotateCcw, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
+import { safeJsonParse } from '@/lib/safeJsonParse';
+import JSZip from 'jszip';
 
 interface ManualCroppingProps {
   onBack: () => void;
@@ -31,7 +33,490 @@ interface ImageDisplay {
   scale: number;
 }
 
+interface BatchCropItem {
+  id: string;
+  filename: string;
+  originalSize: number;
+  previewUrl: string;
+  imageData: string;
+  originalDimensions: { width: number; height: number };
+  targetDimensions: ImageDimensions;
+  status: 'pending' | 'ready' | 'completed' | 'error';
+  croppedData?: string;
+  croppedSize?: number;
+  error?: string;
+}
+
 export function ManualCropping({}: ManualCroppingProps) {
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [batchFiles, setBatchFiles] = useState<File[] | null>(null);
+
+  // Handle batch image upload
+  const handleBatchModeActivation = (files: File[]) => {
+    setBatchFiles(files);
+    setIsBatchMode(true);
+  };
+
+  // Render batch mode if enabled
+  if (isBatchMode && batchFiles) {
+    return <ManualCroppingBatchContent
+      initialFiles={batchFiles}
+      onBack={() => {
+        setIsBatchMode(false);
+        setBatchFiles(null);
+      }}
+    />;
+  }
+
+  return <ManualCroppingContent setBatchFiles={handleBatchModeActivation} />;
+}
+
+interface ManualCroppingBatchContentProps {
+  initialFiles: File[];
+  onBack: () => void;
+}
+
+function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatchContentProps) {
+  const [batchItems, setBatchItems] = useState<BatchCropItem[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [totalCompleted, setTotalCompleted] = useState(0);
+
+  // Cropping state for selected image
+  const [cropFrame, setCropFrame] = useState<CropFrame>({ x: 100, y: 100, width: 300, height: 400 });
+  const [imageDisplay, setImageDisplay] = useState<ImageDisplay>({ x: 0, y: 0, width: 0, height: 0, scale: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
+  const [initialCropFrame, setInitialCropFrame] = useState<CropFrame | null>(null);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        resolve({ width: img.width, height: img.height });
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleBatchImageUpload = async (files: File[]) => {
+    const itemsPromises = files.map(async (file, index) => {
+      const dimensions = await getImageDimensions(file);
+      const base64 = await fileToBase64(file);
+      return {
+        id: `${Date.now()}-${index}`,
+        filename: file.name,
+        originalSize: file.size,
+        previewUrl: URL.createObjectURL(file),
+        imageData: base64,
+        originalDimensions: dimensions,
+        targetDimensions: { width: 1080, height: 1920 },
+        status: 'pending' as const,
+      };
+    });
+
+    const items = await Promise.all(itemsPromises);
+    setBatchItems(items);
+    setTotalCompleted(0);
+  };
+
+  // Load initial files if provided
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      handleBatchImageUpload(initialFiles);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFiles]);
+
+  const handleSelectImage = (id: string) => {
+    setSelectedImageId(id);
+    const item = batchItems.find(i => i.id === id);
+    if (item) {
+      // Calculate image display
+      const containerWidth = 600;
+      const containerHeight = 400;
+      const imageAspect = item.originalDimensions.width / item.originalDimensions.height;
+      const containerAspect = containerWidth / containerHeight;
+
+      let displayWidth, displayHeight, scale;
+      if (imageAspect > containerAspect) {
+        displayWidth = containerWidth;
+        displayHeight = containerWidth / imageAspect;
+        scale = containerWidth / item.originalDimensions.width;
+      } else {
+        displayHeight = containerHeight;
+        displayWidth = containerHeight * imageAspect;
+        scale = containerHeight / item.originalDimensions.height;
+      }
+
+      const newImageDisplay = {
+        x: (containerWidth - displayWidth) / 2,
+        y: (containerHeight - displayHeight) / 2,
+        width: displayWidth,
+        height: displayHeight,
+        scale,
+      };
+      setImageDisplay(newImageDisplay);
+
+      // Initialize crop frame
+      const maxFrameSize = Math.min(displayWidth, displayHeight) * 0.6;
+      const frameSize = Math.min(maxFrameSize, 250);
+      const frameX = newImageDisplay.x + (displayWidth - frameSize) / 2;
+      const frameY = newImageDisplay.y + (displayHeight - frameSize) / 2;
+
+      setCropFrame({
+        x: frameX,
+        y: frameY,
+        width: frameSize,
+        height: frameSize,
+      });
+    }
+  };
+
+  const handleCropImage = async () => {
+    if (!selectedImageId || !canvasRef.current) return;
+
+    const item = batchItems.find(i => i.id === selectedImageId);
+    if (!item) return;
+
+    setIsProcessing(true);
+    setBatchItems(prev => prev.map(i =>
+      i.id === selectedImageId ? { ...i, status: 'ready' as const } : i
+    ));
+
+    try {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get canvas context');
+
+      const cropX = (cropFrame.x - imageDisplay.x) / imageDisplay.scale;
+      const cropY = (cropFrame.y - imageDisplay.y) / imageDisplay.scale;
+      const cropWidth = cropFrame.width / imageDisplay.scale;
+      const cropHeight = cropFrame.height / imageDisplay.scale;
+
+      canvas.width = item.targetDimensions.width;
+      canvas.height = item.targetDimensions.height;
+
+      const img = new window.Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = `data:image/jpeg;base64,${item.imageData}`;
+      });
+
+      const validCropX = Math.round(Math.max(0, cropX));
+      const validCropY = Math.round(Math.max(0, cropY));
+      const maxCropWidth = item.originalDimensions.width - validCropX;
+      const maxCropHeight = item.originalDimensions.height - validCropY;
+      const validCropWidth = Math.round(Math.min(cropWidth, maxCropWidth));
+      const validCropHeight = Math.round(Math.min(cropHeight, maxCropHeight));
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(
+        img,
+        validCropX,
+        validCropY,
+        validCropWidth,
+        validCropHeight,
+        0,
+        0,
+        item.targetDimensions.width,
+        item.targetDimensions.height
+      );
+
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const croppedSize = Math.round((croppedDataUrl.length * 3) / 4);
+
+      setBatchItems(prev => prev.map(i =>
+        i.id === selectedImageId
+          ? { ...i, status: 'completed' as const, croppedData: croppedDataUrl, croppedSize }
+          : i
+      ));
+      setTotalCompleted(prev => prev + 1);
+    } catch (error) {
+      setBatchItems(prev => prev.map(i =>
+        i.id === selectedImageId
+          ? { ...i, status: 'error' as const, error: error instanceof Error ? error.message : 'Crop failed' }
+          : i
+      ));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    const completedItems = batchItems.filter(item => item.status === 'completed' && item.croppedData);
+    if (completedItems.length === 0) return;
+
+    const zip = new JSZip();
+    completedItems.forEach((item) => {
+      const base64Data = item.croppedData!.replace(/^data:image\/\w+;base64,/, '');
+      zip.file(`cropped-${item.filename}`, base64Data, { base64: true });
+    });
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(content);
+    link.download = `cropped-images-${Date.now()}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleReset = () => {
+    batchItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+    setBatchItems([]);
+    setSelectedImageId(null);
+    setTotalCompleted(0);
+  };
+
+  const selectedItem = selectedImageId ? batchItems.find(i => i.id === selectedImageId) : null;
+  const completedCount = batchItems.filter(i => i.status === 'completed').length;
+
+  if (batchItems.length === 0) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <header className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <FileArchive className="w-6 h-6 text-green-600" />
+            </div>
+            <h1 className="text-4xl font-bold text-gray-900">Batch Manual Cropping</h1>
+          </div>
+          <p className="text-lg text-gray-600 mb-4">
+            Upload multiple images and crop each one manually with precision control
+          </p>
+          <div className="max-w-2xl mx-auto bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="text-left">
+                <p className="text-sm text-blue-900 font-medium mb-2">How Batch Cropping Works:</p>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Upload multiple images at once</li>
+                  <li>• Click on any image in the list to select it</li>
+                  <li>• Manually adjust the crop frame for that specific image</li>
+                  <li>• Set custom dimensions for each image individually</li>
+                  <li>• Process each image one by one with your custom settings</li>
+                  <li>• Download all cropped images as a ZIP file</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </header>
+        <div className="max-w-2xl mx-auto">
+          <ImageUploader
+            onImageUpload={(file) => handleBatchImageUpload([file])}
+            onBatchImageUpload={handleBatchImageUpload}
+            isUploading={false}
+            supportsBatch={true}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <header className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Batch Manual Cropping</h1>
+        <p className="text-sm text-gray-600">
+          Select each image below to crop it manually • {completedCount} of {batchItems.length} completed
+        </p>
+      </header>
+
+      {/* Instructions Banner */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-900">
+                <strong>How to use:</strong> Click any image below to select it, adjust the crop frame and dimensions, then click &quot;Crop This Image&quot;. Repeat for each image you want to crop.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Image List */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Images ({batchItems.length})</span>
+                <Button variant="outline" size="sm" onClick={handleReset}>
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {batchItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSelectImage(item.id)}
+                    className={`w-full p-3 rounded-lg border-2 transition-all ${
+                      selectedImageId === item.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={item.previewUrl}
+                        alt={item.filename}
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium text-gray-900 truncate">{item.filename}</p>
+                        <p className="text-xs text-gray-500">
+                          {item.originalDimensions.width} × {item.originalDimensions.height}
+                        </p>
+                        <div className="flex items-center gap-1 mt-1">
+                          {item.status === 'pending' && <Clock className="w-3 h-3 text-gray-400" />}
+                          {item.status === 'ready' && <Clock className="w-3 h-3 text-blue-500" />}
+                          {item.status === 'completed' && <Check className="w-3 h-3 text-green-500" />}
+                          {item.status === 'error' && <AlertCircle className="w-3 h-3 text-red-500" />}
+                          <span className="text-xs text-gray-600 capitalize">{item.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {completedCount > 0 && (
+                <Button
+                  onClick={handleDownloadAll}
+                  className="w-full mt-4 bg-green-600 hover:bg-green-700"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download All ({completedCount})
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Crop Editor */}
+        <div className="lg:col-span-2">
+          {selectedItem ? (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Crop: {selectedItem.filename}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className="relative bg-slate-200 rounded-lg overflow-hidden"
+                    style={{ width: '600px', height: '400px' }}
+                  >
+                    <img
+                      src={selectedItem.previewUrl}
+                      alt={selectedItem.filename}
+                      className="absolute select-none"
+                      style={{
+                        left: imageDisplay.x,
+                        top: imageDisplay.y,
+                        width: imageDisplay.width,
+                        height: imageDisplay.height,
+                        objectFit: 'contain',
+                      }}
+                      draggable={false}
+                    />
+                    <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+
+                    {/* Crop Frame - simplified for this example */}
+                    <div
+                      className="absolute border-2 border-white shadow-lg cursor-move"
+                      style={{
+                        left: cropFrame.x,
+                        top: cropFrame.y,
+                        width: cropFrame.width,
+                        height: cropFrame.height,
+                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)',
+                      }}
+                    >
+                      <div className="absolute -top-8 left-0 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                        {Math.round(cropFrame.width / imageDisplay.scale)} × {Math.round(cropFrame.height / imageDisplay.scale)}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-2 gap-4">
+                <DimensionSelector
+                  originalDimensions={selectedItem.originalDimensions}
+                  targetDimensions={selectedItem.targetDimensions}
+                  onDimensionsChange={(dims) => {
+                    setBatchItems(prev => prev.map(i =>
+                      i.id === selectedImageId ? { ...i, targetDimensions: dims } : i
+                    ));
+                  }}
+                  showAIMessage={false}
+                />
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      onClick={handleCropImage}
+                      disabled={isProcessing || selectedItem.status === 'completed'}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                    >
+                      <Scissors className="h-4 w-4 mr-2" />
+                      {selectedItem.status === 'completed' ? 'Cropped ✓' : 'Crop This Image'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-20 text-center">
+                <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">Select an image from the list to start cropping</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      <canvas ref={canvasRef} className="hidden" />
+    </div>
+  );
+}
+
+interface ManualCroppingContentProps {
+  setBatchFiles: (files: File[]) => void;
+}
+
+function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
   const [targetDimensions, setTargetDimensions] = useState<ImageDimensions>({
     width: 1080,
     height: 1920,
@@ -76,6 +561,10 @@ export function ManualCropping({}: ManualCroppingProps) {
   const handleImageUpload = (file: File) => {
     uploadFile(file);
     setCroppedImageUrl(null);
+  };
+
+  const handleBatchImageUpload = (files: File[]) => {
+    setBatchFiles(files);
   };
 
   useEffect(() => {
@@ -286,7 +775,7 @@ export function ManualCropping({}: ManualCroppingProps) {
                 body: formData,
               });
 
-              const result = await response.json();
+              const result = await safeJsonParse(response);
 
               if (result.success) {
                 const compressedBlob = new Blob(
@@ -595,8 +1084,13 @@ export function ManualCropping({}: ManualCroppingProps) {
 
       <div className="px-2">
         {!uploadedImage ? (
-          <div className="max-w-2xl mx-auto">
-            <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
+          <div className="max-w-2xl mx-auto space-y-4">
+            <ImageUploader
+              onImageUpload={handleImageUpload}
+              onBatchImageUpload={handleBatchImageUpload}
+              isUploading={isUploading}
+              supportsBatch={true}
+            />
           </div>
         ) : (
           <div className="space-y-8">

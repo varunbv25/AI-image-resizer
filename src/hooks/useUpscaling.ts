@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { ImageDimensions, APIResponse, ProcessingStatus } from '@/types';
+import { safeJsonParse } from '@/lib/safeJsonParse';
 
 interface UpscaledImageData {
   imageData: string;
@@ -61,7 +62,7 @@ export function useUpscaling() {
           }),
         });
 
-        const result: APIResponse<UpscaledImageData> = await response.json();
+        const result: APIResponse<UpscaledImageData> = await safeJsonParse(response);
 
         if (!result.success) {
           throw new Error(result.error || 'Upscaling failed');

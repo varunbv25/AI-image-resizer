@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { ImageDimensions, APIResponse } from '@/types';
+import { safeJsonParse } from '@/lib/safeJsonParse';
 
 interface UploadedImageData {
   filename: string;
@@ -29,7 +30,7 @@ export function useFileUpload() {
         body: formData,
       });
 
-      const result: APIResponse<UploadedImageData> = await response.json();
+      const result: APIResponse<UploadedImageData> = await safeJsonParse(response);
 
       if (!result.success) {
         throw new Error(result.error || 'Upload failed');

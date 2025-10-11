@@ -22,6 +22,10 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Precision Control**: Drag-and-zoom functionality for pixel-perfect cropping
 - **Interactive Canvas**: Click and drag image positioning within crop frame
 - **Zoom Controls**: Scale images up or down for precise framing
+- **Batch Support**: Process multiple images with sidebar UI showing all uploads
+- **Per-Image Settings**: Customize crop dimensions and positioning for each image
+- **Status Tracking**: Real-time status indicators (pending, processing, completed, error) for each image
+- **Bulk Download**: Download all cropped images as a ZIP file or individually
 - **Real-time Preview**: Live preview of crop area with exact dimensions
 - **Frame Constraints**: Maintains aspect ratio while allowing flexible positioning
 - **High-Quality Output**: Preserves image quality during cropping process
@@ -31,7 +35,11 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Scale Factor Control**: 1.1x to 4x scaling options or custom target resolutions
 - **Upscaling Only**: Constrained to only enlarge images, not reduce size
 - **Minimum Constraints**: Target resolution cannot be smaller than original
-- **Batch Processing**: Support for processing multiple images simultaneously
+- **Batch Processing**: Support for processing multiple images simultaneously with sidebar UI
+- **Per-Image Settings**: Customize scale factor, target resolution, and quality for each image individually
+- **Batch Actions**: Process all images at once with default settings or customize each one
+- **Status Tracking**: Real-time status indicators (pending, processing, completed, error) for each image
+- **Bulk Download**: Download all processed images as a ZIP file or individually
 - **Quality Preservation**: Maintains image clarity and detail during upscaling
 - **Format Optimization**: Automatic format selection for best quality-to-size ratio
 
@@ -40,6 +48,11 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Auto-Optimized Quality**: Starts with optimal quality settings (80% for JPEG/WebP, level 9 for PNG)
 - **Iterative Compression**: Automatically adjusts quality to reach target file size
 - **Target Size Control**: Set maximum file size as percentage of original (10-100%)
+- **Batch Processing**: Process multiple images simultaneously with sidebar UI
+- **Per-Image Settings**: Customize target file size percentage for each image individually
+- **Batch Actions**: Compress all images at once with default settings or customize each one
+- **Status Tracking**: Real-time status indicators (pending, processing, completed, error) for each image
+- **Bulk Download**: Download all compressed images as a ZIP file or individually
 - **Format-Specific Optimization**:
   - JPEG: MozJPEG with progressive encoding for superior compression
   - PNG: Compression level 9 with palette optimization
@@ -93,6 +106,7 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 ### UI Components & Libraries
 - **Radix UI**: Accessible, unstyled UI primitives (Dialog, Progress, Select, Slider, Tabs)
 - **React Dropzone**: File upload with drag & drop functionality
+- **JSZip**: Client-side ZIP file generation for batch downloads
 - **Class Variance Authority**: Utility for creating variant-based component APIs
 - **clsx & tailwind-merge**: Conditional styling utilities
 - **Lucide React**: Beautiful, customizable icons
@@ -194,63 +208,86 @@ The application offers four distinct processing modes accessible from the main i
 
 ### ✂️ Manual Cropping Mode
 
-1. **Upload Image**
-   - Upload your image using the drag-and-drop interface
-   - Image appears on an interactive canvas
+1. **Upload Image(s)**
+   - Upload single or multiple images using the drag-and-drop interface
+   - Images appear in the sidebar with thumbnails and status indicators
 
-2. **Set Crop Dimensions**
+2. **Select Image to Crop**
+   - Click on an image from the sidebar to work on it
+   - Selected image appears on the interactive canvas in the main content area
+
+3. **Set Crop Dimensions**
    - Select from preset aspect ratios or enter custom dimensions
    - Crop frame appears on the canvas
 
-3. **Position and Scale**
+4. **Position and Scale**
    - Drag the image to position it within the crop frame
    - Use zoom controls to scale the image up or down
    - Real-time preview shows exact crop area
 
-4. **Export Crop**
-   - Click "Crop Image" to process
-   - Download the precisely cropped result
+5. **Process Images**
+   - Click "Crop This Image" to process the selected image
+   - Or click "Crop All Images" to process all pending images with their respective settings
+
+6. **Export Results**
+   - Download individual cropped images one by one
+   - Or click "Download All" to get a ZIP file of all completed images
 
 ### 🔍 Upscaling Mode
 
-1. **Upload Image**
-   - Upload the image you want to enhance
-   - View original dimensions and file information
+1. **Upload Image(s)**
+   - Upload single or multiple images you want to enhance
+   - Images appear in the sidebar with thumbnails, dimensions, and file information
 
-2. **Choose Scale Factor**
+2. **Select Image for Customization (Optional)**
+   - Click on an image from the sidebar to customize its settings
+   - Selected image's settings appear in the main content area
+
+3. **Choose Scale Factor**
    - Select 1.1x to 4x scaling multiplier
    - Or specify exact target resolution (minimum: original dimensions)
-   - Preview estimated output size
+   - Adjust quality settings with mouse wheel scroll support
+   - Settings can be customized per-image or use defaults
 
-3. **Process Enhancement**
-   - Click "Upscale Image" to begin processing
-   - Monitor progress with detailed status updates
+4. **Process Enhancement**
+   - Click "Upscale This Image" to process the selected image with custom settings
+   - Or click "Upscale All Images" to begin batch processing with default settings
+   - Monitor progress with detailed status updates in the sidebar
 
-4. **Download Enhanced Image**
-   - Download the high-resolution result
-   - Compare with original using side-by-side preview
+5. **Download Enhanced Images**
+   - Download individual high-resolution images as they complete
+   - Or click "Download All" to get a ZIP file of all completed images
+   - Compare with original using side-by-side preview for selected image
 
 ### 📦 Image Compression Mode
 
-1. **Upload Image**
-   - Upload your image using drag-and-drop or file selection
-   - View original file size and dimensions
+1. **Upload Image(s)**
+   - Upload single or multiple images using drag-and-drop or file selection
+   - Images appear in the sidebar with thumbnails, file sizes, and dimensions
 
-2. **Configure Compression Settings**
+2. **Select Image for Customization (Optional)**
+   - Click on an image from the sidebar to customize its compression settings
+   - Selected image's settings appear in the main content area
+
+3. **Configure Compression Settings**
    - **Target File Size**: Set target size as percentage of original (10-100%)
    - Use slider or mouse wheel scroll for precise adjustment
    - Preview estimated target file size and reduction percentage
+   - Settings can be customized per-image or use default (40%)
 
-3. **Apply Compression**
-   - Click "Apply Compression" to start processing
+4. **Apply Compression**
+   - Click "Compress This Image" to compress the selected image with custom settings
+   - Or click "Compress All Images" to start batch processing with default settings
    - Algorithm starts with optimal quality (80% JPEG/WebP, level 9 PNG)
    - Automatically reduces quality by 10% increments if needed
    - Multiple optimization attempts ensure best quality-to-size ratio
+   - Monitor progress with status updates in the sidebar
 
-4. **Download Optimized Image**
-   - Preview compressed image with statistics
+5. **Download Optimized Images**
+   - Preview compressed image with statistics for selected image
    - View original, compressed, and target file sizes
-   - Download web-optimized image
+   - Download individual compressed images as they complete
+   - Or click "Download All" to get a ZIP file of all compressed images
 
 ### Processing Methods
 
@@ -475,7 +512,9 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 - **Processing Timeout**: 60 seconds
 - **Default Quality**: 80%
 - **Upscaling Range**: 1.1x to 4x original resolution (enlarge only)
-- **Batch Processing**: Support for multiple files in upscaling mode
+- **Batch Processing**: Supported in Manual Cropping, Upscaling, and Image Compression modes
+- **Per-Image Settings**: Customize processing parameters for each image individually
+- **Batch Download**: ZIP file generation for multiple processed images (JSZip)
 
 ### Supported Aspect Ratios
 
@@ -545,9 +584,10 @@ ai-image-resizer/
 │   │   │   └── tabs.tsx
 │   │   ├── modes/            # Processing mode components
 │   │   │   ├── AIImageResizing.tsx  # AI-powered resizing mode
-│   │   │   ├── ManualCropping.tsx   # Manual cropping mode
-│   │   │   ├── Upscaling.tsx        # Image upscaling mode
-│   │   │   └── ImageCompression.tsx # Image compression mode
+│   │   │   ├── ManualCropping.tsx   # Manual cropping mode with batch UI
+│   │   │   ├── Upscaling.tsx        # Image upscaling mode with batch processing
+│   │   │   └── ImageCompression.tsx # Image compression mode with batch processing
+│   │   ├── BatchProcessor.tsx # Batch processing UI component
 │   │   ├── ImageUploader.tsx  # File upload component
 │   │   ├── DimensionSelector.tsx # Aspect ratio selector
 │   │   ├── ImagePreview.tsx   # Before/after preview
@@ -594,46 +634,60 @@ graph TD
     D --> L[Interactive Canvas]
     D --> M[Crop Controls]
     D --> N[Zoom Controls]
+    D --> O[Sidebar with Batch Items]
 
-    E --> O[ImageUploader]
-    E --> P[Scale Selector]
-    E --> Q[Batch Processor]
-    E --> R[Quality Controls]
+    E --> P[ImageUploader]
+    E --> Q[Sidebar with Batch Items]
+    E --> R[Scale Selector]
+    E --> S[Quality Controls]
+    E --> T[Batch Actions]
 
-    F --> S[ImageUploader]
-    F --> T[Quality Slider]
-    F --> U[Size Controls]
-    F --> V[Preview & Stats]
+    F --> U[ImageUploader]
+    F --> V[Sidebar with Batch Items]
+    F --> W[Target Size Slider]
+    F --> X[Batch Actions]
+    F --> Y[Preview & Stats]
 
-    G --> W[useFileUpload Hook]
-    K --> W
-    O --> W
-    S --> W
+    Q --> Z[Batch Item List]
+    V --> Z
+    O --> Z
 
-    I --> X[useImageProcessing Hook]
-    M --> Y[Manual Crop Logic]
-    Q --> Z[useUpscaling Hook]
-    T --> AA[Compression Logic]
+    Z --> AA[Image Thumbnails]
+    Z --> AB[Status Icons]
+    Z --> AC[Per-Image Settings]
 
-    W --> AB[File Handler]
-    X --> AC[AI Image Processor]
-    Y --> AD[Crop Processor]
-    Z --> AE[Upscale Processor]
-    AA --> AF[Compression Processor]
+    G --> AD[useFileUpload Hook]
+    K --> AD
+    P --> AD
+    U --> AD
 
-    AB --> AG[Upload API]
-    AC --> AH[Process API]
-    AD --> AI[Compress API]
-    AE --> AJ[Upscale API]
-    AF --> AK[Compress-Image API]
+    I --> AE[useImageProcessing Hook]
+    M --> AF[Manual Crop Logic]
+    T --> AG[useUpscaling Hook]
+    X --> AH[Compression Logic]
 
-    AH --> AL[Gemini AI]
-    AH --> AM[Sharp.js Edge Extension]
-    AI --> AN[Sharp.js Cropping]
-    AJ --> AO[Advanced Interpolation]
-    AJ --> AP[Detail Enhancement]
-    AK --> AQ[MozJPEG/PNG/WebP Compression]
-    AK --> AR[Iterative Quality Adjustment]
+    AD --> AI[File Handler]
+    AE --> AJ[AI Image Processor]
+    AF --> AK[Crop Processor]
+    AG --> AL[Upscale Processor]
+    AH --> AM[Compression Processor]
+
+    AI --> AN[Upload API]
+    AJ --> AO[Process API]
+    AK --> AP[Compress API]
+    AL --> AQ[Upscale API]
+    AM --> AR[Compress-Image API]
+
+    AO --> AS[Gemini AI]
+    AO --> AT[Sharp.js Edge Extension]
+    AP --> AU[Sharp.js Cropping]
+    AQ --> AV[Advanced Interpolation]
+    AQ --> AW[Detail Enhancement]
+    AR --> AX[MozJPEG/PNG/WebP Compression]
+    AR --> AY[Iterative Quality Adjustment]
+
+    T --> AZ[JSZip for Batch Download]
+    X --> AZ
 ```
 
 ### Detailed Data Flow Diagrams
@@ -761,143 +815,252 @@ graph TD
 └──────────┘
 ```
 
-#### Upscaling Flow
+#### Upscaling Flow (with Batch Processing)
 ```
-┌─────────────┐
-│ User Upload │
-└──────┬──────┘
+┌─────────────────────┐
+│ User Upload(s)      │
+│ - Single or multiple│
+└──────┬──────────────┘
        │
        v
 ┌─────────────────────┐
 │ File Validation     │
+│ - Each file checked │
 └──────┬──────────────┘
        │
        v
 ┌─────────────────────┐
-│ Settings Selection  │
-│ ┌────────┬────────┐ │
-│ │ Scale  │ Target │ │
-│ │ Factor │  Res.  │ │
-│ └────────┴────────┘ │
-│ + Quality slider    │
-│ (wheel scroll)      │
+│ Batch Queue Created │
+│ ┌───────────────┐   │
+│ │ Image 1       │   │
+│ │ Image 2       │   │
+│ │ Image 3...    │   │
+│ └───────────────┘   │
+│ Status: Pending     │
 └──────┬──────────────┘
        │
-       v
-┌─────────────────────┐
-│ Upscale API         │ (/api/upscale)
-│ - Get original dims │
-│ - Calculate target  │
-└──────┬──────────────┘
-       │
-       v
-┌─────────────────────┐
-│ Validate Dimensions │
-│ - Min: 1.1x scale   │
-│ - Target >= Original│
-└──────┬──────────────┘
-       │
-       v
-┌─────────────────────┐
-│ Lanczos3 Kernel     │
-│ (High-quality       │
-│  upscaling only)    │
-└──────┬──────────────┘
-       │
-       v
-┌─────────────────────┐
-│ Progressive JPEG    │
-└──────┬──────────────┘
-       │
-       v
-┌──────────┐
-│ Download │
-└──────────┘
+       ├──────────────────────────┐
+       │                          │
+       v                          v
+┌─────────────────────┐   ┌──────────────┐
+│ Select Image from   │   │ Process All  │
+│ Sidebar             │   │ (Default)    │
+│ - Customize settings│   └──────┬───────┘
+│ ┌────────┬────────┐ │          │
+│ │ Scale  │ Target │ │          │
+│ │ Factor │  Res.  │ │          │
+│ └────────┴────────┘ │          │
+│ + Quality slider    │          │
+│ (wheel scroll)      │          │
+│ - Per-image config  │          │
+└──────┬──────────────┘          │
+       │                          │
+       v                          v
+┌─────────────────────┐   ┌──────────────┐
+│ Process This Image  │   │ Sequential   │
+└──────┬──────────────┘   │ Processing   │
+       │                  └──────┬───────┘
+       │                         │
+       └────────┬────────────────┘
+                │
+                v
+        ┌───────────────┐
+        │ For Each Image│
+        └───────┬───────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Upscale API       │ (/api/upscale)
+        │ - Get orig. dims  │
+        │ - Calculate target│
+        │ - Use per-image   │
+        │   settings        │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Validate Dims     │
+        │ - Min: 1.1x scale │
+        │ - Target >= Orig. │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Lanczos3 Kernel   │
+        │ (High-quality     │
+        │  upscaling only)  │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Progressive JPEG  │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Update Status     │
+        │ ┌───────────────┐ │
+        │ │✓ Image 1      │ │
+        │ │⏳ Image 2     │ │
+        │ │⏱ Image 3...   │ │
+        │ └───────────────┘ │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ All Complete?     │
+        └───────┬───────────┘
+                │
+            No  │  Yes
+                │
+                └───────┬───────┐
+                        │       │
+                        v       v
+                ┌───────────┐ ┌─────────────┐
+                │ Download  │ │ Download All│
+                │ Single    │ │ (ZIP)       │
+                └───────────┘ └─────────────┘
 ```
 
-#### Image Compression Flow
+#### Image Compression Flow (with Batch Processing)
 ```
-┌─────────────┐
-│ User Upload │
-└──────┬──────┘
+┌─────────────────────┐
+│ User Upload(s)      │
+│ - Single or multiple│
+└──────┬──────────────┘
        │
        v
 ┌─────────────────────┐
 │ File Validation     │
 │ - Extract metadata  │
 │ - Store orig. size  │
+│ - Each file checked │
 └──────┬──────────────┘
        │
        v
 ┌─────────────────────┐
-│ Target Size Slider  │
-│ (with wheel scroll) │
-│ - Set percentage    │
-│ - Show reduction    │
+│ Batch Queue Created │
+│ ┌───────────────┐   │
+│ │ Image 1       │   │
+│ │ Image 2       │   │
+│ │ Image 3...    │   │
+│ └───────────────┘   │
+│ Status: Pending     │
 └──────┬──────────────┘
        │
-       v
-┌─────────────────────┐
-│ Compress API        │ (/api/compress-image)
-└──────┬──────────────┘
-       │
-       v
-┌─────────────────────┐
-│ Detect Format       │
-│ JPEG/PNG/WebP       │
-└──────┬──────────────┘
-       │
-       v
-┌─────────────────────┐
-│ Initial Compression │
-│ Quality = 80%       │
-│ ┌────────────────┐  │
-│ │JPEG: MozJPEG + │  │
-│ │  progressive   │  │
-│ │PNG: Level 9 +  │  │
-│ │  palette       │  │
-│ │WebP: 80%       │  │
-│ └────────────────┘  │
-└──────┬──────────────┘
-       │
-       v
-    ┌──┴──┐
-    │  ?  │ Size > Target?
-    └─┬─┬─┘
-      │ │
-    Yes│ │No
-      │ │
-      v │
-  ┌───────┐│
-  │Reduce ││
-  │quality││
-  │by 10% ││
-  └───┬───┘│
-      │    │
-      v    │
-  ┌───────┐│
-  │Retry  ││
-  │(max 10││
-  │times) ││
-  └───┬───┘│
-      │    │
-      └──┬─┘
-         │
-         v
-    ┌─────────┐
-    │ Display │
-    │ Results │
-    │ ┌─────┐ │
-    │ │Orig.│ │
-    │ │Comp.│ │
-    │ │Targ.│ │
-    │ └─────┘ │
-    └────┬────┘
-         │
-         v
-    ┌──────────┐
-    │ Download │
-    └──────────┘
+       ├──────────────────────────┐
+       │                          │
+       v                          v
+┌─────────────────────┐   ┌──────────────────┐
+│ Select Image from   │   │ Compress All     │
+│ Sidebar             │   │ Images (Default) │
+│ - Customize settings│   └──────┬───────────┘
+│ ┌────────────────┐  │          │
+│ │ Target Size %  │  │          │
+│ │ (wheel scroll) │  │          │
+│ │ - Set percent. │  │          │
+│ │ - Show target  │  │          │
+│ └────────────────┘  │          │
+│ - Per-image config  │          │
+└──────┬──────────────┘          │
+       │                          │
+       v                          v
+┌─────────────────────┐   ┌──────────────┐
+│ Compress This Image │   │ Sequential   │
+└──────┬──────────────┘   │ Processing   │
+       │                  └──────┬───────┘
+       │                         │
+       └────────┬────────────────┘
+                │
+                v
+        ┌───────────────┐
+        │ For Each Image│
+        └───────┬───────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Compress API      │ (/api/compress-image)
+        │ - Use per-image   │
+        │   target size     │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Detect Format     │
+        │ JPEG/PNG/WebP     │
+        └───────┬───────────┘
+                │
+                v
+        ┌───────────────────┐
+        │ Initial Compress. │
+        │ Quality = 80%     │
+        │ ┌──────────────┐  │
+        │ │JPEG: MozJPEG+│  │
+        │ │  progressive │  │
+        │ │PNG: Level 9 +│  │
+        │ │  palette     │  │
+        │ │WebP: 80%     │  │
+        │ └──────────────┘  │
+        └───────┬───────────┘
+                │
+                v
+            ┌───┴───┐
+            │   ?   │ Size > Target?
+            └─┬───┬─┘
+              │   │
+            Yes   No
+              │   │
+              v   │
+          ┌───────┐
+          │Reduce │
+          │quality│
+          │by 10% │
+          └───┬───┘
+              │
+              v
+          ┌───────┐
+          │Retry  │
+          │(max 10│
+          │times) │
+          └───┬───┘
+              │
+              └───┬───┘
+                  │
+                  v
+          ┌───────────────┐
+          │ Update Status │
+          │ ┌───────────┐ │
+          │ │✓ Image 1  │ │
+          │ │⏳ Image 2 │ │
+          │ │⏱ Image 3..│ │
+          │ └───────────┘ │
+          └───────┬───────┘
+                  │
+                  v
+          ┌───────────────┐
+          │ Display       │
+          │ Results       │
+          │ ┌─────┐       │
+          │ │Orig.│       │
+          │ │Comp.│       │
+          │ │Targ.│       │
+          │ └─────┘       │
+          └───────┬───────┘
+                  │
+                  v
+          ┌───────────────┐
+          │ All Complete? │
+          └───────┬───────┘
+                  │
+              No  │  Yes
+                  │
+                  └───┬───────┐
+                      │       │
+                      v       v
+              ┌───────────┐ ┌─────────────┐
+              │ Download  │ │ Download All│
+              │ Single    │ │ (ZIP)       │
+              └───────────┘ └─────────────┘
 ```
 
 ### Data Flow
@@ -915,18 +1078,30 @@ graph TD
 4. **Crop Processing**: User clicks crop → Manual crop logic → `/api/compress` → Sharp.js cropping
 5. **Download**: Cropped image → Base64 to blob conversion → Browser download
 
-#### Upscaling Mode
-1. **File Upload**: User uploads image → `useFileUpload` → `/api/upload` → File validation & metadata extraction
-2. **Scale Selection**: User selects scale factor or target resolution → Preview size calculation
-3. **Batch Processing**: User adds multiple files (optional) → Queue management
-4. **Upscale Processing**: User clicks upscale → `useUpscaling` → `/api/upscale` → Advanced interpolation
-5. **Download**: Enhanced image(s) → Base64 to blob conversion → Browser download
+#### Upscaling Mode (with Batch Processing)
+1. **File Upload**: User uploads single or multiple images → `useFileUpload` → `/api/upload` → File validation & metadata extraction
+2. **Batch Queue Creation**: All uploaded images added to batch queue → Each item gets unique ID, status set to 'pending'
+3. **Sidebar Display**: Images displayed in sidebar with thumbnails, status icons (Clock, Check, AlertCircle), and file info
+4. **Settings Configuration**:
+   - **Option A - Per-Image**: User selects image from sidebar → Customize scale factor, target resolution, quality for that specific image → Click "Process This Image"
+   - **Option B - Batch Default**: Click "Upscale All Images" to use default settings for all pending images
+5. **Sequential Processing**: Images processed one at a time → Status updates from 'pending' → 'processing' → 'completed' or 'error'
+6. **Upscale Processing**: For each image → `useUpscaling` → `/api/upscale` → Advanced interpolation with per-image settings
+7. **Progress Tracking**: Real-time status updates in sidebar, selected image shows full details in main content area
+8. **Download Options**:
+   - **Single Image**: Click download button on individual completed image
+   - **Batch Download**: Click "Download All" to get ZIP file of all completed images (uses JSZip)
 
-#### Image Compression Mode
-1. **File Upload**: User uploads image → `useFileUpload` → `/api/upload` → File validation & metadata extraction
-2. **Settings Configuration**: User adjusts target file size slider (with wheel scroll support) → Real-time target size calculation
-3. **Compression Processing**: User clicks compress → Compression logic → `/api/compress-image` → Iterative quality adjustment
-4. **Algorithm Execution**:
+#### Image Compression Mode (with Batch Processing)
+1. **File Upload**: User uploads single or multiple images → `useFileUpload` → `/api/upload` → File validation & metadata extraction
+2. **Batch Queue Creation**: All uploaded images added to batch queue → Each item gets unique ID, status set to 'pending', original size stored
+3. **Sidebar Display**: Images displayed in sidebar with thumbnails, status icons (Clock, Check, AlertCircle), and file size info
+4. **Settings Configuration**:
+   - **Option A - Per-Image**: User selects image from sidebar → Adjust target file size slider (with wheel scroll support) for that specific image → Real-time target size calculation → Click "Compress This Image"
+   - **Option B - Batch Default**: Click "Compress All Images" to use default target size (40%) for all pending images
+5. **Sequential Processing**: Images processed one at a time → Status updates from 'pending' → 'processing' → 'completed' or 'error'
+6. **Compression Processing**: For each image → Compression logic → `/api/compress-image` → Iterative quality adjustment with per-image target size
+7. **Algorithm Execution**:
    - Initial compression with optimal quality (80% for JPEG/WebP, level 9 for PNG)
    - Format-specific compression:
      - JPEG: MozJPEG with progressive encoding
@@ -934,8 +1109,11 @@ graph TD
      - WebP: 80% quality compression
    - If file size exceeds target: Reduce quality by 10% and retry
    - Repeat up to 10 times or until quality reaches 10% minimum
-5. **Results Display**: Compressed image preview → Shows original size, compressed size, and target size
-6. **Download**: Optimized image → Base64 to blob conversion → Browser download
+8. **Progress Tracking**: Real-time status updates in sidebar, selected image shows compression results in main content area
+9. **Results Display**: Compressed image preview → Shows original size, compressed size, target size, and compression ratio
+10. **Download Options**:
+    - **Single Image**: Click download button on individual completed image
+    - **Batch Download**: Click "Download All" to get ZIP file of all compressed images (uses JSZip)
 
 ## 🚀 Deployment
 
@@ -1051,6 +1229,9 @@ npx tsc --noEmit
 - Use zoom controls for precise positioning
 - Drag from the center of the image for better control
 - Preview updates in real-time to show exact crop area
+- Upload multiple images and customize crop settings for each one
+- Click images in the sidebar to switch between them quickly
+- Use "Crop All Images" for batch processing with consistent settings
 
 **Upscaling:**
 - Minimum scale factor is 1.1x (10% enlargement)
@@ -1058,6 +1239,9 @@ npx tsc --noEmit
 - Higher quality settings may significantly increase processing time
 - Batch processing works best with images of similar sizes
 - Target resolution inputs enforce minimum values based on original dimensions
+- Select individual images from sidebar to customize scale factor and quality
+- Use "Upscale All Images" for consistent batch processing
+- Monitor real-time status for each image in the sidebar (pending, processing, completed)
 
 **Image Compression:**
 - Quality is automatically optimized - starts at 80% for JPEG/WebP, level 9 for PNG
@@ -1068,6 +1252,9 @@ npx tsc --noEmit
 - Use mouse wheel scroll on slider for fine-grained control
 - Algorithm may compress more than expected due to image content
 - If compression ratio seems insufficient, try a lower target percentage
+- Select individual images from sidebar to set custom target size percentage
+- Use "Compress All Images" for batch processing with default 40% target
+- View compression statistics (original, compressed, target sizes) for each completed image
 
 ## 📝 License
 

@@ -49,7 +49,6 @@ export function BatchProcessor({
 }: BatchProcessorProps) {
   const completedItems = items.filter(item => item.status === 'completed');
   const hasCompleted = completedItems.length > 0;
-  const hasPending = items.some(item => item.status === 'pending');
 
   return (
     <Card>

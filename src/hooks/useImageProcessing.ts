@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { ImageDimensions, ProcessingStatus, APIResponse } from '@/types';
+import { safeJsonParse } from '@/lib/safeJsonParse';
 
 interface ProcessedImageData {
   imageData: string;
@@ -62,7 +63,7 @@ export function useImageProcessing() {
           }),
         });
 
-        const result: APIResponse<ProcessedImageData> = await response.json();
+        const result: APIResponse<ProcessedImageData> = await safeJsonParse(response);
 
         if (!result.success) {
           throw new Error(result.error || 'Processing failed');

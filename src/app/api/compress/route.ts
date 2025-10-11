@@ -6,6 +6,10 @@ import { APIResponse } from '@/types';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
+// Increase body size limit to 50MB for large images
+export const bodyParser = {
+  sizeLimit: '50mb',
+};
 
 export async function POST(req: NextRequest) {
   try {
