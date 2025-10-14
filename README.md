@@ -70,7 +70,8 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **Instant Download**: One-click download of processed images
 - **No Upload Limits**: Process images without restrictions
-- **Multiple Format Support**: JPEG, PNG, WebP input and output
+- **Multiple Format Support**: JPEG, PNG, WebP, SVG input | JPEG, PNG, WebP output
+- **SVG Processing**: Automatic SVG to raster conversion at 300 DPI for high-quality output
 
 ### 🎨 UI/UX Enhancements
 - **Interactive Sliders**: Mouse wheel scroll support on all sliders for precise control
@@ -88,6 +89,21 @@ A comprehensive image processing platform offering four powerful modes: AI-power
   - Ctrl+R: Reset
 
 ## 🧮 Processing Algorithms
+
+### SVG Processing
+
+All SVG files are automatically converted to high-quality raster format before processing:
+
+- **Conversion Method**: Sharp.js with 300 DPI density setting
+- **Output Format**: PNG intermediate format for quality preservation
+- **Process Flow**:
+  1. SVG file detection via header analysis (`<svg` or `<?xml` tags)
+  2. Rasterization at 300 DPI for high-quality output
+  3. Conversion to PNG format to preserve transparency and quality
+  4. Standard processing pipeline applied (AI resizing, cropping, upscaling, or compression)
+  5. Final output in user-selected format (JPEG, PNG, or WebP)
+- **Supported in All Modes**: AI Image Resizing, Manual Cropping, Upscaling, and Compression
+- **Quality Considerations**: SVG files maintain quality during conversion due to high DPI settings
 
 ### AI Image Resizing Algorithms
 
@@ -267,7 +283,7 @@ yarn dev
 ```
 
 6. **Open your browser:**
-Navigate to [http://localhost:3000](http://localhost:3000) to use the application.
+Navigate to [http://localhost:3000] to use the application.
 
 ### Development Commands
 
@@ -301,7 +317,8 @@ The application offers four distinct processing modes accessible from the main i
 1. **Upload Image**
    - Drag and drop an image file onto the upload area
    - Or click the upload area to browse and select a file
-   - Supported formats: JPEG, PNG, WebP (max 10MB)
+   - Supported formats: JPEG, PNG, WebP, SVG (max 10MB)
+   - SVG files are automatically converted to high-quality raster format (300 DPI)
    - The application will validate and display image details
 
 2. **Select Target Dimensions**
@@ -620,8 +637,9 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 ### Application Constants
 
 - **Max File Size**: 10MB per file
-- **Supported Input Formats**: JPEG, PNG, WebP
+- **Supported Input Formats**: JPEG, PNG, WebP, SVG
 - **Supported Output Formats**: JPEG, PNG, WebP
+- **SVG Conversion**: SVG files automatically converted to raster at 300 DPI
 - **Processing Timeout**: 60 seconds
 - **Default Quality**: 80%
 - **Upscaling Range**: 1.1x to 4x original resolution (enlarge only)
@@ -1291,9 +1309,10 @@ npx tsc --noEmit
 
 2. **File Upload Fails**
    - Check file size is under 10MB
-   - Verify file format is supported (JPEG, PNG, WebP)
+   - Verify file format is supported (JPEG, PNG, WebP, SVG)
    - Try a different image file
    - Ensure browser supports modern JavaScript features
+   - For SVG files, ensure they have valid width/height attributes or viewBox
 
 3. **AI Processing Issues**
    - Large images may take longer to process

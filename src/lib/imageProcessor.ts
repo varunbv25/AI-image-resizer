@@ -42,23 +42,38 @@ export class ImageProcessor {
   ): Promise<ProcessedImage> {
     try {
       const sharp = await this.getSharp();
+      const isSVG = await this.isSVG(imageBuffer);
+
+      // For SVG files, convert to raster first for consistent processing
+      let workingBuffer: Buffer = imageBuffer;
+      if (isSVG) {
+        console.log('Converting SVG to raster format...');
+        const svgConverted = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+        workingBuffer = Buffer.from(svgConverted);
+      }
+
       let processedBuffer: Buffer;
 
       if (strategy.type === 'ai' && this.apiKey) {
         try {
           processedBuffer = await this.processWithNanoBanana(
-            imageBuffer,
+            workingBuffer,
             targetDimensions
           );
 
           // Check if AI processed image is different from original
-          const isImageDifferent = await this.areImagesDifferent(imageBuffer, processedBuffer);
+          const isImageDifferent = await this.areImagesDifferent(workingBuffer, processedBuffer);
 
           if (!isImageDifferent) {
             // If AI didn't change the image, use edge detection fallback
             console.warn('AI processing returned unchanged image, using edge color extension fallback');
             processedBuffer = await this.extendWithEdgeColorDetection(
-              imageBuffer,
+              workingBuffer,
               originalDimensions,
               targetDimensions
             );
@@ -79,7 +94,7 @@ export class ImageProcessor {
         } catch (error) {
           console.warn('AI processing failed, using edge color extension fallback:', error);
           processedBuffer = await this.extendWithEdgeColorDetection(
-            imageBuffer,
+            workingBuffer,
             originalDimensions,
             targetDimensions
           );
@@ -87,7 +102,7 @@ export class ImageProcessor {
       } else {
         // Fallback: extend background using edge color detection
         processedBuffer = await this.extendWithEdgeColorDetection(
-          imageBuffer,
+          workingBuffer,
           originalDimensions,
           targetDimensions
         );
@@ -469,10 +484,19 @@ export class ImageProcessor {
 
   async getImageDimensions(imageBuffer: Buffer): Promise<ImageDimensions> {
     const sharp = await this.getSharp();
-    const metadata = await sharp(imageBuffer).metadata();
+    // For SVG files, set density to ensure proper dimension calculation
+    const metadata = await sharp(imageBuffer, {
+      density: 300 // High DPI for quality SVG rasterization
+    }).metadata();
     return {
       width: metadata.width || 0,
       height: metadata.height || 0,
     };
+  }
+
+  private async isSVG(imageBuffer: Buffer): Promise<boolean> {
+    // Check if buffer starts with SVG signature
+    const header = imageBuffer.slice(0, 100).toString('utf-8');
+    return header.includes('<svg') || header.includes('<?xml');
   }
 }

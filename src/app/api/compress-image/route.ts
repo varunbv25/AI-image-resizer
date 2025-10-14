@@ -17,8 +17,24 @@ async function compressImage(
 ): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
 
+  // Check if SVG and convert to raster first
+  const header = buffer.slice(0, 100).toString('utf-8');
+  const isSVG = header.includes('<svg') || header.includes('<?xml');
+
+  let workingBuffer: Buffer = buffer;
+  if (isSVG) {
+    console.log('Converting SVG to raster format for compression...');
+    const svgConverted = await sharp(buffer, {
+      density: 300,
+      limitInputPixels: 1000000000
+    })
+    .png()
+    .toBuffer();
+    workingBuffer = Buffer.from(svgConverted);
+  }
+
   // Increase pixel limit to handle large images
-  const image = sharp(buffer, {
+  const image = sharp(workingBuffer, {
     limitInputPixels: 1000000000 // 1 gigapixel limit
   });
 

@@ -34,6 +34,7 @@ export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, 
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/png': ['.png'],
       'image/webp': ['.webp'],
+      'image/svg+xml': ['.svg'],
     },
     multiple: supportsBatch,
     disabled: isUploading,
@@ -64,7 +65,7 @@ export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, 
               {isUploading ? 'Uploading...' : supportsBatch ? 'Drag and drop images or browse' : 'Drag and drop an image or browse'}
             </h3>
             <p className="text-sm text-gray-500">
-              Supports JPEG, PNG and WebP{supportsBatch && ' • Multiple files supported'}
+              Supports JPEG, PNG, WebP and SVG{supportsBatch && ' • Multiple files supported'}
             </p>
           </div>
 

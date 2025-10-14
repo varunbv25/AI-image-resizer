@@ -46,8 +46,24 @@ async function upscaleImage(
 }> {
   const sharp = await getSharp();
 
+  // Check if SVG and convert to raster first
+  const header = imageBuffer.slice(0, 100).toString('utf-8');
+  const isSVG = header.includes('<svg') || header.includes('<?xml');
+
+  let workingBuffer: Buffer = imageBuffer;
+  if (isSVG) {
+    console.log('Converting SVG to raster format for upscaling...');
+    const svgConverted = await sharp(imageBuffer, {
+      density: 300,
+      limitInputPixels: 1000000000
+    })
+    .png()
+    .toBuffer();
+    workingBuffer = Buffer.from(svgConverted);
+  }
+
   // Get original dimensions with increased pixel limit
-  const originalMetadata = await sharp(imageBuffer, {
+  const originalMetadata = await sharp(workingBuffer, {
     limitInputPixels: 1000000000 // 1 gigapixel limit
   }).metadata();
   const originalWidth = originalMetadata.width || 0;
@@ -63,7 +79,7 @@ async function upscaleImage(
   }
 
   // Use Lanczos3 for high-quality upscaling
-  const processedBuffer = await sharp(imageBuffer, {
+  const processedBuffer = await sharp(workingBuffer, {
     limitInputPixels: 1000000000 // 1 gigapixel limit
   })
     .resize(targetDimensions.width, targetDimensions.height, {

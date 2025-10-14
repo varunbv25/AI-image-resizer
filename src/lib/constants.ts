@@ -14,6 +14,7 @@ export const SUPPORTED_FORMATS = [
   'image/jpg',
   'image/png',
   'image/webp',
+  'image/svg+xml',
 ];
 
 export const PROCESSING_TIMEOUT = 60000; // 60 seconds

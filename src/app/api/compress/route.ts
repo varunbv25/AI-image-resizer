@@ -67,7 +67,23 @@ export async function POST(req: NextRequest) {
 
       const sharp = (await import('sharp')).default;
 
-      let sharpInstance = sharp(buffer, { limitInputPixels: 1000000000 });
+      // Check if SVG and convert to raster first
+      const header = buffer.slice(0, 100).toString('utf-8');
+      const isSVG = header.includes('<svg') || header.includes('<?xml');
+
+      let workingBuffer: Buffer = buffer;
+      if (isSVG) {
+        console.log('Converting SVG to raster format for compression...');
+        const svgConverted = await sharp(buffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+        workingBuffer = Buffer.from(svgConverted);
+      }
+
+      let sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
 
       const qualityValue = quality ? parseInt(quality) : 80;
 

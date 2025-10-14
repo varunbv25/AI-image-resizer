@@ -75,6 +75,8 @@ export class FileHandler {
         return 'png';
       case 'image/webp':
         return 'webp';
+      case 'image/svg+xml':
+        return 'svg';
       default:
         return 'jpg';
     }
