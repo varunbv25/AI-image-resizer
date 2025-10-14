@@ -217,11 +217,35 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
       canvas.width = item.targetDimensions.width;
       canvas.height = item.targetDimensions.height;
 
+      // Determine MIME type from base64 data
+      const detectMimeType = (base64: string): string => {
+        if (base64.startsWith('/9j/')) return 'image/jpeg';
+        if (base64.startsWith('iVBOR')) return 'image/png';
+        if (base64.startsWith('UklGR')) return 'image/webp';
+        if (base64.startsWith('PHN2Zy') || base64.startsWith('PD94bWwg')) return 'image/svg+xml';
+        return 'image/jpeg'; // fallback
+      };
+
+      const mimeType = detectMimeType(item.imageData);
+
       const img = new window.Image();
+
+      // Enable CORS for SVG images
+      if (mimeType === 'image/svg+xml') {
+        img.crossOrigin = 'anonymous';
+      }
+
       await new Promise((resolve, reject) => {
-        img.onload = resolve;
+        img.onload = () => {
+          // For SVG, wait longer to ensure it's fully rendered
+          if (mimeType === 'image/svg+xml') {
+            setTimeout(resolve, 200);
+          } else {
+            resolve(null);
+          }
+        };
         img.onerror = reject;
-        img.src = `data:image/jpeg;base64,${item.imageData}`;
+        img.src = `data:${mimeType};base64,${item.imageData}`;
       });
 
       const validCropX = Math.round(Math.max(0, cropX));
@@ -232,12 +256,31 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
       const validCropHeight = Math.round(Math.min(cropHeight, maxCropHeight));
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Set white background for transparency
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // For SVG, use the natural dimensions from the loaded image
+      const sourceWidth = img.naturalWidth || item.originalDimensions.width;
+      const sourceHeight = img.naturalHeight || item.originalDimensions.height;
+
+      // Calculate the scale factor between original dimensions and natural dimensions
+      const scaleX = sourceWidth / item.originalDimensions.width;
+      const scaleY = sourceHeight / item.originalDimensions.height;
+
+      // Adjust crop coordinates for SVG scaling
+      const adjustedCropX = validCropX * scaleX;
+      const adjustedCropY = validCropY * scaleY;
+      const adjustedCropWidth = validCropWidth * scaleX;
+      const adjustedCropHeight = validCropHeight * scaleY;
+
       ctx.drawImage(
         img,
-        validCropX,
-        validCropY,
-        validCropWidth,
-        validCropHeight,
+        adjustedCropX,
+        adjustedCropY,
+        adjustedCropWidth,
+        adjustedCropHeight,
         0,
         0,
         item.targetDimensions.width,
@@ -726,9 +769,25 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
       canvas.height = outputHeight;
 
       const img = new window.Image();
+
+      // Enable CORS for SVG images to prevent tainted canvas
+      if (uploadedImage.mimetype === 'image/svg+xml') {
+        img.crossOrigin = 'anonymous';
+      }
+
       img.onload = async () => {
         console.log('Image loaded successfully');
+
+        // For SVG, wait longer to ensure it's fully rendered
+        if (uploadedImage.mimetype === 'image/svg+xml') {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Set white background for transparency
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Ensure crop coordinates are within bounds and round to avoid subpixel issues
         const validCropX = Math.round(Math.max(0, cropX));
@@ -746,16 +805,32 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
           validCropWidth,
           validCropHeight,
           originalWidth: uploadedImage.originalDimensions.width,
-          originalHeight: uploadedImage.originalDimensions.height
+          originalHeight: uploadedImage.originalDimensions.height,
+          imgNaturalWidth: img.naturalWidth,
+          imgNaturalHeight: img.naturalHeight
         });
+
+        // For SVG, use the natural dimensions from the loaded image
+        const sourceWidth = img.naturalWidth || uploadedImage.originalDimensions.width;
+        const sourceHeight = img.naturalHeight || uploadedImage.originalDimensions.height;
+
+        // Calculate the scale factor between original dimensions and natural dimensions
+        const scaleX = sourceWidth / uploadedImage.originalDimensions.width;
+        const scaleY = sourceHeight / uploadedImage.originalDimensions.height;
+
+        // Adjust crop coordinates for SVG scaling
+        const adjustedCropX = validCropX * scaleX;
+        const adjustedCropY = validCropY * scaleY;
+        const adjustedCropWidth = validCropWidth * scaleX;
+        const adjustedCropHeight = validCropHeight * scaleY;
 
         // Draw the cropped portion to the canvas
         ctx.drawImage(
           img,
-          validCropX,
-          validCropY,
-          validCropWidth,
-          validCropHeight,
+          adjustedCropX,
+          adjustedCropY,
+          adjustedCropWidth,
+          adjustedCropHeight,
           0,
           0,
           outputWidth,
@@ -803,7 +878,7 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
         setIsProcessing(false);
       };
 
-      img.src = `data:image/jpeg;base64,${uploadedImage.imageData}`;
+      img.src = `data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`;
     } catch (error) {
       console.error('Error cropping image:', error);
       setIsProcessing(false);
@@ -1128,10 +1203,11 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
                             </div>
                             <div className="flex-1 relative bg-gray-50 p-4">
                               <Image
-                                src={`data:image/jpeg;base64,${uploadedImage.imageData}`}
+                                src={`data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`}
                                 alt="Original image"
                                 fill
                                 className="object-contain"
+                                unoptimized={uploadedImage.mimetype === 'image/svg+xml'}
                               />
                             </div>
                             <div className="py-3 border-t border-gray-200 bg-white">
@@ -1174,7 +1250,7 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
                           {uploadedImage?.imageData && (
                             <img
                               ref={imageRef}
-                              src={`data:image/jpeg;base64,${uploadedImage.imageData}`}
+                              src={`data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`}
                               alt="Original image"
                               className="absolute select-none"
                               style={{
@@ -1374,7 +1450,7 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
       <canvas ref={canvasRef} className="hidden" />
 
       <footer className="text-center mt-12 text-gray-500 text-sm">
-        <p>No file size limits • Supports JPEG, PNG and WebP</p>
+        <p>No file size limits • Supports JPEG, PNG, WebP and SVG</p>
       </footer>
     </div>
   );

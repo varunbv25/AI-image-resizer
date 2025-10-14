@@ -1175,7 +1175,7 @@ export function ImageCompression({}: ImageCompressionProps) {
       )}
 
       <footer className="text-center mt-12 text-gray-500 text-sm">
-        <p>No file size limits • Supports JPEG, PNG and WebP</p>
+        <p>No file size limits • Supports JPEG, PNG, WebP and SVG</p>
       </footer>
     </div>
   );

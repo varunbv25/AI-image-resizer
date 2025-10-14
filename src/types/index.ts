@@ -19,7 +19,7 @@ export interface ProcessingStatus {
 export interface ImageProcessingOptions {
   targetDimensions: ImageDimensions;
   quality: number;
-  format: 'jpeg' | 'png' | 'webp';
+  format: 'jpeg' | 'png' | 'webp' | 'svg';
 }
 
 export interface ExtensionStrategy {

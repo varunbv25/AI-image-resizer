@@ -92,18 +92,87 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 
 ### SVG Processing
 
-All SVG files are automatically converted to high-quality raster format before processing:
+The application provides comprehensive SVG support across all processing modes with intelligent handling for both input and output operations:
 
-- **Conversion Method**: Sharp.js with 300 DPI density setting
-- **Output Format**: PNG intermediate format for quality preservation
-- **Process Flow**:
-  1. SVG file detection via header analysis (`<svg` or `<?xml` tags)
-  2. Rasterization at 300 DPI for high-quality output
-  3. Conversion to PNG format to preserve transparency and quality
-  4. Standard processing pipeline applied (AI resizing, cropping, upscaling, or compression)
-  5. Final output in user-selected format (JPEG, PNG, or WebP)
-- **Supported in All Modes**: AI Image Resizing, Manual Cropping, Upscaling, and Compression
-- **Quality Considerations**: SVG files maintain quality during conversion due to high DPI settings
+#### Core SVG Features
+- **Input Support**: SVG files accepted in all four processing modes (AI Resizing, Manual Cropping, Upscaling, Compression)
+- **Output Support**: Can output processed images as SVG format (embedded raster as base64 PNG in SVG wrapper)
+- **Format Detection**: Automatic MIME type detection (`image/svg+xml`) from base64 signatures
+- **High-Quality Conversion**: All processing uses 300 DPI density for superior raster output
+
+#### SVG Processing Pipeline
+
+**1. Input Detection & Conversion**
+- **Detection Method**: Header analysis for SVG signatures (`PHN2Zy`, `PD94bWwg` in base64, or `<svg`, `<?xml` in raw)
+- **Conversion Strategy**: Sharp.js with `density: 300` parameter for high-DPI rasterization
+- **Intermediate Format**: PNG for transparency and quality preservation
+- **All Functions Protected**: Every Sharp.js call includes `density: 300` parameter for consistent SVG handling
+
+**2. Backend Processing (imageProcessor.ts)**
+- **Defensive SVG Handling**: All private functions detect and convert SVG to raster before processing
+- **Functions with SVG Protection**:
+  - `processWithNanoBanana` (line 160): AI processing with automatic SVG conversion
+  - `extendWithEdgeColorDetection` (line 261): Edge extension with SVG rasterization
+  - `detectDominantEdgeColor` (line 327): Color detection with SVG conversion
+  - `cropToExactDimensions` (line 439): Cropping with SVG handling
+  - `areImagesDifferent` (line 500): Image comparison with dual SVG conversion
+  - `convertToSVG` (line 592): Raster-to-SVG conversion for output
+  - `optimizeForWeb` (line 570): Web optimization with SVG input handling
+- **Automatic Detection**: Each function checks `isSVG()` and converts to PNG at 300 DPI before processing
+- **Consistent Parameters**: All `sharp()` calls use `{ limitInputPixels: 1000000000, density: 300 }`
+
+**3. Frontend Preview Support**
+- **ImagePreview Component**: Dynamic MIME type support with `originalMimeType` and `processedMimeType` props
+- **Next.js Image Optimization**: `unoptimized={true}` flag for SVG images to prevent optimization issues
+- **All Modes Updated**: AI Resizing, Upscaling, Manual Cropping, and Compression components pass MIME types
+- **Format Conversion**: Automatic conversion between `svg` format string and `image/svg+xml` MIME type
+
+**4. Manual Cropping Special Handling**
+- **Canvas CORS Configuration**: `img.crossOrigin = 'anonymous'` prevents tainted canvas with SVG
+- **Render Delay**: 200ms timeout after SVG load ensures complete rendering before canvas operations
+- **Natural Dimension Detection**: Uses `img.naturalWidth` and `img.naturalHeight` for actual rendered size
+- **Coordinate Scaling**: Calculates scale factors between specified and natural dimensions
+- **Algorithm**:
+  ```javascript
+  const scaleX = img.naturalWidth / uploadedImage.originalDimensions.width;
+  const scaleY = img.naturalHeight / uploadedImage.originalDimensions.height;
+  const adjustedCropX = cropX * scaleX;
+  const adjustedCropY = cropY * scaleY;
+  ```
+- **Transparency Handling**: White background fill before drawing SVG to canvas
+- **Batch Mode Support**: Same SVG handling in both single and batch cropping modes
+
+**5. SVG Output Format**
+- **Output Method**: Converts processed raster images to SVG by embedding PNG as base64 data URI
+- **SVG Structure**:
+  ```xml
+  <svg xmlns="http://www.w3.org/2000/svg" width="W" height="H" viewBox="0 0 W H">
+    <image width="W" height="H" xlink:href="data:image/png;base64,..."/>
+  </svg>
+  ```
+- **Dimension Preservation**: Maintains exact target dimensions in SVG viewBox and image attributes
+- **Format Selection**: Available as output format option alongside JPEG, PNG, and WebP
+
+#### SVG Technical Implementation
+
+**Backend Functions**:
+- All Sharp.js operations include density parameter: `sharp(buffer, { density: 300, limitInputPixels: 1000000000 })`
+- SVG detection before every processing operation
+- Automatic PNG conversion at 300 DPI when SVG detected
+- `convertToSVG()` helper for output format conversion
+
+**Frontend Components**:
+- `ImagePreview.tsx`: Dynamic MIME type handling with `unoptimized` prop for SVG
+- `AIImageResizing.tsx`: Passes `uploadedImage.mimetype` and processed format MIME type
+- `Upscaling.tsx`: Converts `svg` format to `image/svg+xml` for display
+- `ManualCropping.tsx`: Advanced canvas SVG rendering with scaling and CORS
+- All mode components: Updated footer text to include SVG format support
+
+**Quality Considerations**:
+- **High DPI Conversion**: 300 DPI ensures no quality loss during SVG rasterization
+- **Format Preservation**: Original SVG structure preserved in output when SVG format selected
+- **Canvas Rendering**: Special handling prevents black boxes or blank outputs in manual cropping
+- **Cross-Browser**: CORS and timing strategies ensure compatibility across all modern browsers
 
 ### AI Image Resizing Algorithms
 

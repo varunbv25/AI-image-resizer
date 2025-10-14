@@ -42,12 +42,15 @@ export class ImageProcessor {
   ): Promise<ProcessedImage> {
     try {
       const sharp = await this.getSharp();
-      const isSVG = await this.isSVG(imageBuffer);
+      const isSVGInput = await this.isSVG(imageBuffer);
+
+      // Track original format for potential preservation
+      const originalFormat = isSVGInput ? 'svg' : options.format;
 
       // For SVG files, convert to raster first for consistent processing
       let workingBuffer: Buffer = imageBuffer;
-      if (isSVG) {
-        console.log('Converting SVG to raster format...');
+      if (isSVGInput) {
+        console.log('Converting SVG to raster format for processing...');
         const svgConverted = await sharp(imageBuffer, {
           density: 300,
           limitInputPixels: 1000000000
@@ -112,7 +115,22 @@ export class ImageProcessor {
       const optimizedBuffer = await this.optimizeForWeb(processedBuffer, options);
 
       // Get metadata
-      const metadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000 }).metadata();
+      let finalFormat = options.format;
+
+      // For SVG output, we don't need sharp metadata as it's already in SVG format
+      if (options.format === 'svg') {
+        return {
+          buffer: optimizedBuffer,
+          metadata: {
+            width: targetDimensions.width,
+            height: targetDimensions.height,
+            format: 'svg',
+            size: optimizedBuffer.length,
+          },
+        };
+      }
+
+      const metadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
 
       return {
         buffer: optimizedBuffer,
@@ -139,6 +157,19 @@ export class ImageProcessor {
 
     const sharp = await this.getSharp();
 
+    // Defensive SVG handling: convert to raster if SVG is passed
+    let workingBuffer = imageBuffer;
+    const isSVGInput = await this.isSVG(imageBuffer);
+    if (isSVGInput) {
+      console.log('Converting SVG to raster in processWithNanoBanana...');
+      workingBuffer = await sharp(imageBuffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+    }
+
     // Create temporary file for input image
     const tempDir = os.tmpdir();
     const tempInputPath = path.join(tempDir, `input_${Date.now()}.jpg`);
@@ -146,7 +177,7 @@ export class ImageProcessor {
 
     try {
       // Save input image to temp file
-      fs.writeFileSync(tempInputPath, imageBuffer);
+      fs.writeFileSync(tempInputPath, workingBuffer);
 
       // Initialize Google GenAI
       const ai = new GoogleGenAI({ apiKey: this.apiKey });
@@ -156,7 +187,7 @@ export class ImageProcessor {
       const base64Image = imageData.toString('base64');
 
       // Detect image format
-      const metadata = await sharp(imageBuffer, { limitInputPixels: 1000000000 }).metadata();
+      const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
       const imageFormat = metadata.format || 'jpeg';
 
       // Create prompt for nano banana model
@@ -227,17 +258,30 @@ export class ImageProcessor {
   ): Promise<Buffer> {
     const sharp = await this.getSharp();
 
+    // Defensive SVG handling: convert to raster if SVG is passed
+    let workingBuffer = imageBuffer;
+    const isSVGInput = await this.isSVG(imageBuffer);
+    if (isSVGInput) {
+      console.log('Converting SVG to raster in extendWithEdgeColorDetection...');
+      workingBuffer = await sharp(imageBuffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+    }
+
     // If target dimensions are smaller than original, crop instead of extend
     if (targetDimensions.width <= originalDimensions.width &&
         targetDimensions.height <= originalDimensions.height) {
-      return await this.cropToExactDimensions(imageBuffer, targetDimensions);
+      return await this.cropToExactDimensions(workingBuffer, targetDimensions);
     }
 
     // Detect edge color from the original image
-    const edgeColor = await this.detectDominantEdgeColor(imageBuffer);
+    const edgeColor = await this.detectDominantEdgeColor(workingBuffer);
 
     // Get actual dimensions from the image buffer to ensure consistency
-    const actualMetadata = await sharp(imageBuffer, { limitInputPixels: 1000000000 }).metadata();
+    const actualMetadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
     const actualWidth = actualMetadata.width || originalDimensions.width;
     const actualHeight = actualMetadata.height || originalDimensions.height;
 
@@ -261,13 +305,13 @@ export class ImageProcessor {
 
     // Resize the composite to exact target dimensions if needed
     let result = await canvas
-      .composite([{ input: imageBuffer, left, top }])
+      .composite([{ input: workingBuffer, left, top }])
       .jpeg({ quality: 90 })
       .toBuffer();
 
     // If we had to make the canvas larger than requested, resize to exact target
     if (finalTargetWidth !== targetDimensions.width || finalTargetHeight !== targetDimensions.height) {
-      result = await sharp(result, { limitInputPixels: 1000000000 })
+      result = await sharp(result, { limitInputPixels: 1000000000, density: 300 })
         .resize(targetDimensions.width, targetDimensions.height, { fit: 'fill' })
         .jpeg({ quality: 90 })
         .toBuffer();
@@ -279,7 +323,21 @@ export class ImageProcessor {
   private async detectDominantEdgeColor(imageBuffer: Buffer): Promise<{ r: number; g: number; b: number }> {
     try {
       const sharp = await this.getSharp();
-      const image = sharp(imageBuffer, { limitInputPixels: 1000000000 });
+
+      // Defensive SVG handling: convert to raster if SVG is passed
+      let workingBuffer = imageBuffer;
+      const isSVGInput = await this.isSVG(imageBuffer);
+      if (isSVGInput) {
+        console.log('Converting SVG to raster in detectDominantEdgeColor...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      const image = sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 });
       const metadata = await image.metadata();
       const width = metadata.width || 0;
       const height = metadata.height || 0;
@@ -391,7 +449,21 @@ export class ImageProcessor {
     targetDimensions: ImageDimensions
   ): Promise<Buffer> {
     const sharp = await this.getSharp();
-    const metadata = await sharp(imageBuffer, { limitInputPixels: 1000000000 }).metadata();
+
+    // Defensive SVG handling: convert to raster if SVG is passed
+    let workingBuffer = imageBuffer;
+    const isSVGInput = await this.isSVG(imageBuffer);
+    if (isSVGInput) {
+      console.log('Converting SVG to raster in cropToExactDimensions...');
+      workingBuffer = await sharp(imageBuffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+    }
+
+    const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
     const originalWidth = metadata.width || 0;
     const originalHeight = metadata.height || 0;
 
@@ -405,7 +477,7 @@ export class ImageProcessor {
     const scaledHeight = Math.round(originalHeight * scale);
 
     // Resize and center crop to exact dimensions
-    return await sharp(imageBuffer, { limitInputPixels: 1000000000 })
+    return await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 })
       .resize(scaledWidth, scaledHeight)
       .extract({
         left: Math.max(0, Math.floor((scaledWidth - targetDimensions.width) / 2)),
@@ -425,14 +497,40 @@ export class ImageProcessor {
     try {
       const sharp = await this.getSharp();
 
+      // Defensive SVG handling: convert to raster if SVG is passed
+      let workingOriginalBuffer = originalBuffer;
+      let workingProcessedBuffer = processedBuffer;
+
+      const isSVGOriginal = await this.isSVG(originalBuffer);
+      if (isSVGOriginal) {
+        console.log('Converting original SVG to raster in areImagesDifferent...');
+        workingOriginalBuffer = await sharp(originalBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      const isSVGProcessed = await this.isSVG(processedBuffer);
+      if (isSVGProcessed) {
+        console.log('Converting processed SVG to raster in areImagesDifferent...');
+        workingProcessedBuffer = await sharp(processedBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
       // Quick size check first
-      if (originalBuffer.length !== processedBuffer.length) {
+      if (workingOriginalBuffer.length !== workingProcessedBuffer.length) {
         return true;
       }
 
       // Get metadata for both images
-      const originalMeta = await sharp(originalBuffer, { limitInputPixels: 1000000000 }).metadata();
-      const processedMeta = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).metadata();
+      const originalMeta = await sharp(workingOriginalBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+      const processedMeta = await sharp(workingProcessedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
 
       // If dimensions are different, images are different
       if (originalMeta.width !== processedMeta.width ||
@@ -441,8 +539,8 @@ export class ImageProcessor {
       }
 
       // Compare image statistics for a quick content comparison
-      const originalStats = await sharp(originalBuffer, { limitInputPixels: 1000000000 }).stats();
-      const processedStats = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).stats();
+      const originalStats = await sharp(workingOriginalBuffer, { limitInputPixels: 1000000000, density: 300 }).stats();
+      const processedStats = await sharp(workingProcessedBuffer, { limitInputPixels: 1000000000, density: 300 }).stats();
 
       // Compare mean values across channels with a tolerance
       const tolerance = 5; // Allow small differences due to compression/processing
@@ -468,7 +566,21 @@ export class ImageProcessor {
     options: ImageProcessingOptions
   ): Promise<Buffer> {
     const sharp = await this.getSharp();
-    const sharpInstance = sharp(imageBuffer, { limitInputPixels: 1000000000 });
+
+    // Defensive SVG handling: if input is SVG and output is not SVG, convert to raster first
+    let workingBuffer = imageBuffer;
+    const isSVGInput = await this.isSVG(imageBuffer);
+    if (isSVGInput && options.format !== 'svg') {
+      console.log('Converting SVG to raster in optimizeForWeb...');
+      workingBuffer = await sharp(imageBuffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+    }
+
+    const sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 });
 
     switch (options.format) {
       case 'jpeg':
@@ -477,9 +589,53 @@ export class ImageProcessor {
         return await sharpInstance.png({ quality: options.quality }).toBuffer();
       case 'webp':
         return await sharpInstance.webp({ quality: options.quality }).toBuffer();
+      case 'svg':
+        // Convert raster to SVG by embedding it as a data URI
+        return await this.convertToSVG(workingBuffer, options);
       default:
         return await sharpInstance.jpeg({ quality: options.quality }).toBuffer();
     }
+  }
+
+  private async convertToSVG(
+    imageBuffer: Buffer,
+    options: ImageProcessingOptions
+  ): Promise<Buffer> {
+    const sharp = await this.getSharp();
+
+    // Defensive SVG handling: if input is already SVG, convert to raster first
+    let workingBuffer = imageBuffer;
+    const isSVGInput = await this.isSVG(imageBuffer);
+    if (isSVGInput) {
+      console.log('Converting SVG to raster in convertToSVG before re-embedding...');
+      workingBuffer = await sharp(imageBuffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+    }
+
+    // Convert to PNG first for better quality in SVG embedding
+    const pngBuffer = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 })
+      .png({ quality: options.quality })
+      .toBuffer();
+
+    // Get image dimensions
+    const metadata = await sharp(pngBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+    const width = metadata.width || options.targetDimensions.width;
+    const height = metadata.height || options.targetDimensions.height;
+
+    // Convert PNG to base64
+    const base64Image = pngBuffer.toString('base64');
+
+    // Create SVG with embedded PNG
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <image width="${width}" height="${height}" xlink:href="data:image/png;base64,${base64Image}"/>
+</svg>`;
+
+    return Buffer.from(svgContent, 'utf-8');
   }
 
   async getImageDimensions(imageBuffer: Buffer): Promise<ImageDimensions> {

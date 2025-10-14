@@ -173,8 +173,9 @@ export function Upscaling({ onBack }: UpscalingProps) {
           throw new Error(result.error || 'Upscaling failed');
         }
 
-        // Create data URL
-        const dataUrl = `data:image/${result.data.metadata.format};base64,${result.data.imageData}`;
+        // Create data URL with proper MIME type for SVG
+        const mimeType = result.data.metadata.format === 'svg' ? 'image/svg+xml' : `image/${result.data.metadata.format}`;
+        const dataUrl = `data:${mimeType};base64,${result.data.imageData}`;
 
         // Update item with success
         setBatchItems(prev => prev.map(item =>
@@ -267,8 +268,9 @@ export function Upscaling({ onBack }: UpscalingProps) {
         throw new Error(result.error || 'Upscaling failed');
       }
 
-      // Create data URL
-      const dataUrl = `data:image/${result.data.metadata.format};base64,${result.data.imageData}`;
+      // Create data URL with proper MIME type for SVG
+      const mimeType = result.data.metadata.format === 'svg' ? 'image/svg+xml' : `image/${result.data.metadata.format}`;
+      const dataUrl = `data:${mimeType};base64,${result.data.imageData}`;
 
       // Update item with success
       setBatchItems(prev => prev.map(item =>
@@ -1292,13 +1294,16 @@ export function Upscaling({ onBack }: UpscalingProps) {
                 onTouchEnd={() => setIsComparing(false)}
               >
                 {/* Upscaled Image (base layer) */}
-                {upscaledImage && (
-                  <img
-                    src={`data:image/${upscaledImage.metadata.format};base64,${upscaledImage.imageData}`}
-                    alt="Upscaled"
-                    className="absolute inset-0 w-full h-full object-contain"
-                  />
-                )}
+                {upscaledImage && (() => {
+                  const mimeType = upscaledImage.metadata.format === 'svg' ? 'image/svg+xml' : `image/${upscaledImage.metadata.format}`;
+                  return (
+                    <img
+                      src={`data:${mimeType};base64,${upscaledImage.imageData}`}
+                      alt="Upscaled"
+                      className="absolute inset-0 w-full h-full object-contain"
+                    />
+                  );
+                })()}
 
                 {/* Original Image (clipped layer) */}
                 <div
@@ -1422,7 +1427,7 @@ export function Upscaling({ onBack }: UpscalingProps) {
       )}
 
       <footer className="text-center mt-12 text-gray-500 text-sm">
-        <p>No file size limits • Supports JPEG, PNG and WebP</p>
+        <p>No file size limits • Supports JPEG, PNG, WebP and SVG</p>
       </footer>
     </div>
   );

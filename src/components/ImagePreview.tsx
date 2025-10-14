@@ -10,6 +10,8 @@ interface ImagePreviewProps {
   originalDimensions?: ImageDimensions;
   targetDimensions?: ImageDimensions;
   isProcessing?: boolean;
+  originalMimeType?: string;
+  processedMimeType?: string;
 }
 
 export function ImagePreview({
@@ -18,6 +20,8 @@ export function ImagePreview({
   originalDimensions,
   targetDimensions,
   isProcessing,
+  originalMimeType = 'image/jpeg',
+  processedMimeType = 'image/jpeg',
 }: ImagePreviewProps) {
   if (!originalImage) {
     return (
@@ -47,10 +51,11 @@ export function ImagePreview({
             <h4 className="font-medium text-base text-center">Original Image</h4>
             <div className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden min-h-[250px]">
               <Image
-                src={`data:image/jpeg;base64,${originalImage}`}
+                src={`data:${originalMimeType};base64,${originalImage}`}
                 alt="Original image"
                 fill
                 style={{ objectFit: 'contain' }}
+                unoptimized={originalMimeType === 'image/svg+xml'}
               />
             </div>
             {originalDimensions && (
@@ -73,10 +78,11 @@ export function ImagePreview({
                 </div>
               ) : processedImage ? (
                 <Image
-                  src={`data:image/jpeg;base64,${processedImage}`}
+                  src={`data:${processedMimeType};base64,${processedImage}`}
                   alt="Processed image"
                   fill
                   style={{ objectFit: 'contain' }}
+                  unoptimized={processedMimeType === 'image/svg+xml'}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center p-4">

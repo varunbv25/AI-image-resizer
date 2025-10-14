@@ -163,12 +163,14 @@ function AIImageResizingBatchContent({ initialFiles }: AIImageResizingBatchConte
         throw new Error(result.error || 'Processing failed');
       }
 
+      const processedMimeType = result.data.metadata.format === 'svg' ? 'image/svg+xml' : `image/${result.data.metadata.format || 'jpeg'}`;
+
       setBatchItems(prev => prev.map(i =>
         i.id === id
           ? {
               ...i,
               status: 'completed' as const,
-              processedData: `data:image/jpeg;base64,${result.data.imageData}`,
+              processedData: `data:${processedMimeType};base64,${result.data.imageData}`,
               processedSize: result.data.metadata.size,
             }
           : i
@@ -631,6 +633,8 @@ function AIImageResizingContent({
             originalDimensions={uploadedImage?.originalDimensions}
             targetDimensions={targetDimensions}
             isProcessing={isProcessing}
+            originalMimeType={uploadedImage?.mimetype}
+            processedMimeType={processedImage?.metadata?.format ? `image/${processedImage.metadata.format}` : undefined}
           />
 
           {/* Progress Bar under preview - separate component */}
@@ -689,7 +693,7 @@ function AIImageResizingContent({
       )}
 
       <footer className="text-center mt-12 text-gray-500 text-sm">
-        <p>No file size limits • Supports JPEG, PNG and WebP</p>
+        <p>No file size limits • Supports JPEG, PNG, WebP and SVG</p>
       </footer>
     </div>
   );
