@@ -702,7 +702,7 @@ export function Upscaling({ onBack }: UpscalingProps) {
                       }
                       min={0.5}
                       max={1}
-                      step={0.05}
+                      step={0.01}
                       className="w-full"
                     />
                   </div>
@@ -968,7 +968,7 @@ export function Upscaling({ onBack }: UpscalingProps) {
                           }
                           min={0.5}
                           max={1}
-                          step={0.05}
+                          step={0.01}
                           className="w-full"
                         />
                         <div className="flex justify-between text-xs text-gray-500 mt-1">
