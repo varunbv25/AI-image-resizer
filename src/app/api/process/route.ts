@@ -11,22 +11,24 @@ export const maxDuration = 60; // 60 seconds timeout
 export const dynamic = 'force-dynamic';
 // Note: Body size limit configured in next.config.js (100MB)
 
+interface ProcessRequestBody {
+  imageData: string;
+  targetDimensions: ImageDimensions;
+  quality?: number;
+  format?: 'jpeg' | 'png' | 'webp';
+  strategy?: ExtensionStrategy;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Use custom JSON parser to support large payloads (up to 100MB)
-    const body = await parseJsonBody(req);
+    const body = await parseJsonBody<ProcessRequestBody>(req);
     const {
       imageData,
       targetDimensions,
       quality = 80,
       format = 'jpeg',
       strategy = { type: 'ai' },
-    }: {
-      imageData: string;
-      targetDimensions: ImageDimensions;
-      quality?: number;
-      format?: 'jpeg' | 'png' | 'webp';
-      strategy?: ExtensionStrategy;
     } = body;
 
     if (!imageData || !targetDimensions) {
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
     // Try fallback strategy if AI processing failed
     if (error instanceof Error && error.message.includes('AI')) {
       try {
-        const body = await parseJsonBody(req);
+        const body = await parseJsonBody<ProcessRequestBody>(req);
         const { imageData, targetDimensions, quality = 80, format = 'jpeg' } = body;
 
         const imageBuffer = Buffer.from(imageData, 'base64');

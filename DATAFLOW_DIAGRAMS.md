@@ -10,6 +10,8 @@ This document contains comprehensive data flow diagrams for all four processing 
 4. [Upscaling Flow](#upscaling-flow)
 5. [Image Compression Flow](#image-compression-flow)
 6. [Format-Specific Processing Flows](#format-specific-processing-flows)
+7. [Large Image Upload Flow](#large-image-upload-flow)
+8. [Integration Flow](#integration-flow)
 
 ---
 
@@ -585,6 +587,117 @@ flowchart TD
 
 ---
 
+## Large Image Upload Flow
+
+Detailed flow showing how large image payloads are handled across all API routes.
+
+```mermaid
+flowchart TD
+    Start([User Uploads Image<br/>via Frontend]) --> Encode[Encode Image to Base64<br/>~33% size increase]
+
+    Encode --> SendAPI[Send POST Request<br/>to API Route]
+
+    SendAPI --> APIRoute{API Route<br/>Receives Request}
+
+    APIRoute -->|/api/process| ProcessRoute[Process API Route]
+    APIRoute -->|/api/compress| CompressRoute[Compress API Route]
+    APIRoute -->|/api/upscale| UpscaleRoute[Upscale API Route]
+    APIRoute -->|/api/compress-image| CompressImageRoute[Compress-Image API Route]
+
+    ProcessRoute --> CustomParser
+    CompressRoute --> CustomParser
+    UpscaleRoute --> CustomParser
+    CompressImageRoute --> CustomParser
+
+    CustomParser[Custom Request Parser<br/>parseJsonBody<br/>src/lib/requestHelper.ts] --> ReadText[Read Request as Text<br/>request.text]
+
+    ReadText --> CheckSize{Payload Size<br/>Check}
+
+    CheckSize -->|Size > 100MB| SizeError[Throw Error<br/>Request body too large:<br/>XXX MB exceeds limit]
+    CheckSize -->|Size ≤ 100MB| ParseJSON[Parse JSON<br/>JSON.parse text]
+
+    SizeError --> CatchError[Error Handler<br/>in API Route]
+    ParseJSON --> ParseSuccess{Parse<br/>Success?}
+
+    ParseSuccess -->|Syntax Error| JSONError[Invalid JSON Error]
+    ParseSuccess -->|Success| ReturnParsed[Return Parsed Body<br/>Type-safe object T]
+
+    JSONError --> CatchError
+    ReturnParsed --> ProcessImage[Continue Image Processing<br/>- Extract image data<br/>- Decode base64<br/>- Process with Sharp.js]
+
+    CatchError --> CheckErrorType{Error Type?}
+
+    CheckErrorType -->|Payload Too Large| Return413[Return HTTP 413<br/>Payload Too Large<br/>User-friendly message:<br/>'Image file is too large...<br/>Please use smaller than 10MB']
+
+    CheckErrorType -->|Invalid JSON| Return400[Return HTTP 400<br/>Bad Request<br/>'Invalid JSON in request body']
+
+    CheckErrorType -->|Other Error| Return500[Return HTTP 500<br/>Internal Server Error]
+
+    ProcessImage --> ProcessSuccess{Processing<br/>Success?}
+
+    ProcessSuccess -->|Success| Return200[Return HTTP 200<br/>Processed image data]
+    ProcessSuccess -->|Error| ProcessError[Processing Error]
+
+    ProcessError --> Return500
+
+    Return413 --> Frontend[Display Error to User<br/>'Image too large']
+    Return400 --> Frontend
+    Return500 --> Frontend
+    Return200 --> FrontendSuccess[Display Processed Image<br/>Download option]
+
+    Frontend --> End([End])
+    FrontendSuccess --> End
+
+    style Start fill:#90EE90
+    style CustomParser fill:#87CEEB
+    style Return413 fill:#FF6B6B
+    style Return400 fill:#FF6B6B
+    style Return500 fill:#FF6B6B
+    style Return200 fill:#98FB98
+    style End fill:#FFB6C1
+```
+
+### Platform-Specific Payload Limits
+
+Different deployment platforms have varying payload size limits:
+
+```mermaid
+graph LR
+    subgraph Local["Local Development"]
+        LocalLimit[100MB<br/>Custom Parser]
+    end
+
+    subgraph Vercel["Vercel"]
+        VercelHobby[Hobby: 4.5MB<br/>Hard Limit]
+        VercelPro[Pro: 4.5MB+<br/>Contact Support]
+    end
+
+    subgraph SelfHosted["Self-Hosted"]
+        SelfLimit[100MB<br/>NODE_OPTIONS config]
+    end
+
+    subgraph Railway["Railway"]
+        RailwayLimit[100MB<br/>Default Support]
+    end
+
+    subgraph Cloudflare["Cloudflare Pages"]
+        CloudflareLimit[100MB<br/>Default Support]
+    end
+
+    subgraph AWS["AWS Lambda"]
+        AWSLimit[6MB<br/>Hard Limit<br/>Use S3 presigned URLs]
+    end
+
+    style Local fill:#90EE90
+    style SelfHosted fill:#90EE90
+    style Railway fill:#90EE90
+    style Cloudflare fill:#90EE90
+    style Vercel fill:#FFD700
+    style AWS fill:#FF6B6B
+```
+
+---
+
 ## Integration Flow
 
 Complete end-to-end integration showing how all components work together.
@@ -599,6 +712,7 @@ graph TB
     end
 
     subgraph API["API Layer (/api/*)"]
+        RequestParser["Request Parser<br/>parseJsonBody<br/>100MB limit"]
         UploadAPI["Upload API<br/>/api/upload"]
         ProcessAPI["Process API<br/>/api/process"]
         CompressAPI["Compress API<br/>/api/compress"]
@@ -630,10 +744,11 @@ graph TB
     Buffer --> UploadAPI
     UploadAPI --> Preview
 
-    Controls --> ProcessAPI
-    Controls --> CompressAPI
-    Controls --> UpscaleAPI
-    Controls --> CompressImageAPI
+    Controls --> RequestParser
+    RequestParser --> ProcessAPI
+    RequestParser --> CompressAPI
+    RequestParser --> UpscaleAPI
+    RequestParser --> CompressImageAPI
 
     ProcessAPI --> ImageProcessor
     ProcessAPI --> GeminiAI

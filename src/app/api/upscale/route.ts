@@ -8,6 +8,13 @@ export const maxDuration = 60; // 60 seconds timeout
 export const dynamic = 'force-dynamic';
 // Note: Body size limit configured in next.config.js (100MB)
 
+interface UpscaleRequestBody {
+  imageData: string;
+  targetDimensions: ImageDimensions;
+  quality?: number;
+  format?: 'jpeg' | 'png' | 'webp';
+}
+
 async function getSharp() {
   try {
     const sharpModule = await import('sharp');
@@ -123,17 +130,12 @@ async function upscaleImage(
 export async function POST(req: NextRequest) {
   try {
     // Use custom JSON parser to support large payloads (up to 100MB)
-    const body = await parseJsonBody(req);
+    const body = await parseJsonBody<UpscaleRequestBody>(req);
     const {
       imageData,
       targetDimensions,
       quality = 80,
       format = 'jpeg',
-    }: {
-      imageData: string;
-      targetDimensions: ImageDimensions;
-      quality?: number;
-      format?: 'jpeg' | 'png' | 'webp';
     } = body;
 
     if (!imageData || !targetDimensions) {

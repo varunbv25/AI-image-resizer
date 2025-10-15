@@ -67,6 +67,7 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Progress Tracking**: Real-time processing status with detailed progress indicators
 - **Error Handling**: Graceful error handling with user-friendly messages
 - **File Validation**: Automatic validation of file size (max 10MB) and supported formats
+- **Large Image Support**: Custom request parser handles payloads up to 100MB (deployment platform dependent)
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **Instant Download**: One-click download of processed images
 - **No Upload Limits**: Process images without restrictions
@@ -1273,6 +1274,55 @@ ai-image-resizer/
 > - API endpoints and their connections
 > - External services (Gemini AI, Sharp.js processing)
 > - Data flow between frontend and backend layers
+
+### Large Image Upload Architecture
+
+The application supports large image uploads through a custom request parsing system:
+
+**Request Handling Pipeline**:
+1. **Custom JSON Parser** (`src/lib/requestHelper.ts`):
+   - `parseJsonBody<T>()`: Parses JSON payloads up to 100MB (configurable)
+   - Bypasses Next.js default ~1MB limit for `req.json()`
+   - Validates payload size before parsing
+   - Returns user-friendly error messages (HTTP 413) when limits exceeded
+
+2. **API Route Integration**:
+   - All 4 API routes use `parseJsonBody()` instead of `req.json()`
+   - Routes: `/api/process`, `/api/compress`, `/api/upscale`, `/api/compress-image`
+   - Error handling for payload size errors with clear user feedback
+   - Base64 image data support (images increase ~33% in size when encoded)
+
+3. **Platform Considerations**:
+   - **Local Development**: Supports up to 100MB through custom parser
+   - **Self-Hosted**: Configurable via `NODE_OPTIONS="--max-http-header-size=100000000"`
+   - **Vercel**: 4.5MB limit (Hobby/Pro plans require upgrade or alternative approach)
+   - **Railway/Cloudflare**: 100MB support with proper configuration
+   - **AWS Lambda**: 6MB hard limit (use S3 presigned URLs as alternative)
+
+**Implementation Details**:
+```typescript
+// src/lib/requestHelper.ts
+export async function parseJsonBody<T>(
+  request: Request,
+  maxSize: number = 100 * 1024 * 1024 // 100MB default
+): Promise<T> {
+  const text = await request.text();
+  const sizeInBytes = new TextEncoder().encode(text).length;
+
+  if (sizeInBytes > maxSize) {
+    throw new Error(`Request body too large: ${...}MB exceeds limit`);
+  }
+
+  return JSON.parse(text) as T;
+}
+```
+
+**Error Handling**:
+- HTTP 413 (Payload Too Large): Clear message directing users to reduce image size
+- HTTP 400 (Bad Request): General processing errors
+- HTTP 500 (Internal Server Error): Server-side errors
+
+For deployment-specific configuration, see **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ### Detailed Data Flow Diagrams
 

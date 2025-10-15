@@ -10,7 +10,7 @@
  * @param maxSize - Maximum size in bytes (default 100MB)
  * @returns Parsed JSON object
  */
-export async function parseJsonBody<T = any>(
+export async function parseJsonBody<T = unknown>(
   request: Request,
   maxSize: number = 100 * 1024 * 1024 // 100MB default
 ): Promise<T> {

@@ -8,6 +8,14 @@ export const maxDuration = 60; // 60 seconds timeout
 export const dynamic = 'force-dynamic';
 // Note: Body size limit configured in next.config.js (100MB)
 
+interface CompressImageRequestBody {
+  imageData: string;
+  maxFileSizePercent?: number;
+  maxFileSizeKB?: number;
+  quality?: number;
+  originalSize: number;
+}
+
 async function compressImage(
   buffer: Buffer,
   format: string,
@@ -68,7 +76,7 @@ async function compressImage(
 export async function POST(req: NextRequest) {
   try {
     // Use custom JSON parser to support large payloads (up to 100MB)
-    const body = await parseJsonBody(req);
+    const body = await parseJsonBody<CompressImageRequestBody>(req);
     const { imageData, maxFileSizePercent, maxFileSizeKB, quality: userQuality, originalSize } = body;
 
     if (!imageData) {
