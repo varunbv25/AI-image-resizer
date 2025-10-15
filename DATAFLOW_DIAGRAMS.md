@@ -599,11 +599,11 @@ graph TB
     end
 
     subgraph API["API Layer (/api/*)"]
-        UploadAPI[/api/upload]
-        ProcessAPI[/api/process]
-        CompressAPI[/api/compress]
-        UpscaleAPI[/api/upscale]
-        CompressImageAPI[/api/compress-image]
+        UploadAPI["Upload API<br/>/api/upload"]
+        ProcessAPI["Process API<br/>/api/process"]
+        CompressAPI["Compress API<br/>/api/compress"]
+        UpscaleAPI["Upscale API<br/>/api/upscale"]
+        CompressImageAPI["Compress-Image API<br/>/api/compress-image"]
     end
 
     subgraph Processing["Processing Layer (Sharp.js)"]
