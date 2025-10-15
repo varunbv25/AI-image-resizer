@@ -14,6 +14,7 @@ import { useUpscaling } from '@/hooks/useUpscaling';
 import { ImageDimensions } from '@/types';
 import { Download, RotateCcw, Maximize, Settings, Info, Check, Clock, AlertCircle } from 'lucide-react';
 import JSZip from 'jszip';
+import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
 interface UpscalingProps {
   onBack: () => void;
 }
@@ -81,11 +82,18 @@ export function Upscaling({ onBack }: UpscalingProps) {
     setTotalProcessed(0);
     setBatchProcessingStarted(false);
 
-    // Store uploaded files
-    setUploadedFiles(files);
+    // Compress files before storing (prevents payload size errors)
+    const preparedFiles = await prepareFilesForBatchUpload(files, {
+      maxSizeMB: 3,
+      maxWidthOrHeight: 4096,
+      quality: 0.8,
+    });
+
+    // Store prepared (compressed if needed) files
+    setUploadedFiles(preparedFiles);
 
     // Create initial batch items with preview URLs and get dimensions
-    const itemsPromises = files.map(async (file, index) => {
+    const itemsPromises = preparedFiles.map(async (file, index) => {
       const dimensions = await getImageDimensions(file);
       const settings: UpscaleSettings = {
         method: upscaleSettings.method,

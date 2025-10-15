@@ -701,6 +701,37 @@ The application automatically compresses large images before upload to prevent p
 - `src/hooks/useFileUpload.ts` - Upload hook with compression
 - `src/components/ImageUploader.tsx` - Visual feedback
 
+### Large File Support by Processing Mode
+
+The application's 4 processing modes have varying levels of compression support:
+
+**Single Upload Compression** (via `useFileUpload` hook):
+- ✅ **AI Image Resizing**: Fully supported
+- ✅ **Manual Cropping**: Fully supported
+- ✅ **Upscaling**: Fully supported
+- ✅ **Image Compression**: Fully supported
+
+**Batch Upload Compression** (via `batchUploadHelper`):
+- ❌ **AI Image Resizing**: Not yet implemented
+- ❌ **Manual Cropping**: Not yet implemented
+- ✅ **Upscaling**: Fully supported - `src/components/modes/Upscaling.tsx:190-198`
+- ✅ **Image Compression**: Fully supported - `src/components/modes/ImageCompression.tsx:156-164`
+
+**Summary Table**:
+
+| Processing Mode | Single Upload | Batch Upload | Implementation Status |
+|----------------|--------------|--------------|----------------------|
+| **AI Image Resizing** | ✅ Compressed (>3MB) | ❌ Not implemented | Partial Support |
+| **Manual Cropping** | ✅ Compressed (>3MB) | ❌ Not implemented | Partial Support |
+| **Upscaling** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | **Full Support** |
+| **Image Compression** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | **Full Support** |
+
+**Implementation Details**:
+- Single uploads use compression automatically through the `useFileUpload` hook
+- Batch uploads in Upscaling and Image Compression modes use the `prepareFilesForBatchUpload()` helper
+- AI Image Resizing and Manual Cropping batch modes need `batchUploadHelper` integration
+- All compression uses consistent settings: 3MB max, 4096px max dimension, 80% quality
+
 ```
 
 ### Platform-Specific Payload Limits

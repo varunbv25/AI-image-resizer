@@ -1371,6 +1371,28 @@ export async function parseJsonBody<T>(
 - HTTP 400 (Bad Request): General processing errors
 - HTTP 500 (Internal Server Error): Server-side errors
 
+**5. Large File Support by Mode**:
+
+All 4 processing modes support client-side compression for single uploads. Batch upload support varies:
+
+| Processing Mode | Single Upload | Batch Upload | Status |
+|----------------|--------------|--------------|---------|
+| **AI Image Resizing** | ✅ Compressed (>3MB) | ❌ Not yet implemented | Partial Support |
+| **Manual Cropping** | ✅ Compressed (>3MB) | ❌ Not yet implemented | Partial Support |
+| **Upscaling** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | **Full Support** |
+| **Image Compression** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | **Full Support** |
+
+**Implementation Status**:
+- ✅ **Upscaling & Image Compression**: Both single and batch uploads use automatic compression
+- ⚠️ **AI Resizing & Manual Cropping**: Single uploads compressed, batch uploads need update
+
+**Files Involved**:
+- `src/lib/clientImageCompression.ts` - Core compression utility (all modes)
+- `src/lib/batchUploadHelper.ts` - Batch compression helper (Upscaling & Compression only)
+- `src/hooks/useFileUpload.ts` - Single upload compression (all modes)
+- `src/components/modes/Upscaling.tsx` - Batch compression ✅
+- `src/components/modes/ImageCompression.tsx` - Batch compression ✅
+
 For deployment-specific configuration, see **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ### Detailed Data Flow Diagrams

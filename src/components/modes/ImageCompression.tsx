@@ -12,6 +12,7 @@ import { useFileUpload } from '@/hooks/useFileUpload';
 import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
+import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
 
 interface ImageCompressionProps {
   onBack: () => void;
@@ -84,11 +85,18 @@ export function ImageCompression({}: ImageCompressionProps) {
     setIsBatchMode(true);
     setBatchProcessingStarted(false);
 
-    // Store uploaded files
-    setUploadedFiles(files);
+    // Compress files before storing (prevents payload size errors)
+    const preparedFiles = await prepareFilesForBatchUpload(files, {
+      maxSizeMB: 3,
+      maxWidthOrHeight: 4096,
+      quality: 0.8,
+    });
+
+    // Store prepared (compressed if needed) files
+    setUploadedFiles(preparedFiles);
 
     // Create initial batch items with preview URLs and get dimensions
-    const itemsPromises = files.map(async (file, index) => {
+    const itemsPromises = preparedFiles.map(async (file, index) => {
       const dimensions = await getImageDimensions(file);
       const settings: CompressionSettings = {
         compressionMode: compressionMode,
