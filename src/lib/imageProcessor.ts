@@ -44,7 +44,19 @@ export class ImageProcessor {
       const sharp = await this.getSharp();
       const isSVGInput = await this.isSVG(imageBuffer);
 
-      // For SVG files, convert to raster first for consistent processing
+      // If input is SVG and output format is SVG, preserve vector format
+      if (isSVGInput && options.format === 'svg') {
+        console.log('Processing SVG natively to preserve vector format...');
+        return await this.processSVGNatively(
+          imageBuffer,
+          originalDimensions,
+          targetDimensions,
+          options,
+          strategy
+        );
+      }
+
+      // For SVG files with non-SVG output, convert to raster first for consistent processing
       let workingBuffer: Buffer = imageBuffer;
       if (isSVGInput) {
         console.log('Converting SVG to raster format for processing...');
@@ -648,5 +660,213 @@ export class ImageProcessor {
     // Check if buffer starts with SVG signature
     const header = imageBuffer.slice(0, 100).toString('utf-8');
     return header.includes('<svg') || header.includes('<?xml');
+  }
+
+  /**
+   * Process SVG natively to preserve vector format
+   */
+  private async processSVGNatively(
+    imageBuffer: Buffer,
+    originalDimensions: ImageDimensions,
+    targetDimensions: ImageDimensions,
+    options: ImageProcessingOptions,
+    strategy: ExtensionStrategy
+  ): Promise<ProcessedImage> {
+    // AI processing requires rasterization - warn user and fall back to edge extension
+    if (strategy.type === 'ai' && this.apiKey) {
+      console.warn('⚠️  AI processing on SVG requires rasterization. Using vector-based edge extension instead to preserve SVG format.');
+    }
+
+    const svgString = imageBuffer.toString('utf-8');
+    let processedSVG: string;
+
+    // Check if we need to extend or just resize
+    const needsExtension = targetDimensions.width > originalDimensions.width ||
+                          targetDimensions.height > originalDimensions.height;
+
+    if (needsExtension) {
+      // Extend SVG canvas with background
+      processedSVG = await this.extendSVGCanvas(
+        svgString,
+        originalDimensions,
+        targetDimensions
+      );
+    } else {
+      // Just resize the viewBox
+      processedSVG = this.resizeSVGViewBox(
+        svgString,
+        targetDimensions
+      );
+    }
+
+    // Optimize SVG
+    const optimizedSVG = await this.optimizeSVG(processedSVG);
+    const resultBuffer = Buffer.from(optimizedSVG, 'utf-8');
+
+    return {
+      buffer: resultBuffer,
+      metadata: {
+        width: targetDimensions.width,
+        height: targetDimensions.height,
+        format: 'svg',
+        size: resultBuffer.length,
+      },
+    };
+  }
+
+  /**
+   * Resize SVG by modifying its viewBox and dimensions
+   */
+  private resizeSVGViewBox(
+    svgString: string,
+    targetDimensions: ImageDimensions
+  ): string {
+    // Parse SVG to extract viewBox or create one from width/height
+    const svgTagMatch = svgString.match(/<svg[^>]*>/);
+    if (!svgTagMatch) {
+      throw new Error('Invalid SVG: No <svg> tag found');
+    }
+
+    const svgTag = svgTagMatch[0];
+    const viewBoxMatch = svgTag.match(/viewBox=["']([^"']+)["']/);
+
+    let viewBox: string;
+    if (viewBoxMatch) {
+      viewBox = viewBoxMatch[1];
+    } else {
+      // Create viewBox from existing width/height or use target dimensions
+      const widthMatch = svgTag.match(/width=["']([^"']+)["']/);
+      const heightMatch = svgTag.match(/height=["']([^"']+)["']/);
+      const width = widthMatch ? parseFloat(widthMatch[1]) : targetDimensions.width;
+      const height = heightMatch ? parseFloat(heightMatch[1]) : targetDimensions.height;
+      viewBox = `0 0 ${width} ${height}`;
+    }
+
+    // Update or add width, height, and viewBox
+    let newSvgTag = svgTag;
+
+    // Update or add viewBox
+    if (viewBoxMatch) {
+      newSvgTag = newSvgTag.replace(/viewBox=["'][^"']+["']/, `viewBox="${viewBox}"`);
+    } else {
+      newSvgTag = newSvgTag.replace('<svg', `<svg viewBox="${viewBox}"`);
+    }
+
+    // Update or add width
+    if (svgTag.match(/width=["'][^"']+["']/)) {
+      newSvgTag = newSvgTag.replace(/width=["'][^"']+["']/, `width="${targetDimensions.width}"`);
+    } else {
+      newSvgTag = newSvgTag.replace('<svg', `<svg width="${targetDimensions.width}"`);
+    }
+
+    // Update or add height
+    if (svgTag.match(/height=["'][^"']+["']/)) {
+      newSvgTag = newSvgTag.replace(/height=["'][^"']+["']/, `height="${targetDimensions.height}"`);
+    } else {
+      newSvgTag = newSvgTag.replace('<svg', `<svg height="${targetDimensions.height}"`);
+    }
+
+    return svgString.replace(svgTagMatch[0], newSvgTag);
+  }
+
+  /**
+   * Extend SVG canvas by wrapping in a larger SVG with background
+   */
+  private async extendSVGCanvas(
+    svgString: string,
+    originalDimensions: ImageDimensions,
+    targetDimensions: ImageDimensions
+  ): Promise<string> {
+    // Detect background color from SVG (look for fill attributes or use white)
+    const backgroundColor = this.detectSVGBackgroundColor(svgString);
+
+    // Calculate centering offset
+    const offsetX = Math.max(0, (targetDimensions.width - originalDimensions.width) / 2);
+    const offsetY = Math.max(0, (targetDimensions.height - originalDimensions.height) / 2);
+
+    // Wrap original SVG in a new SVG with background
+    const wrappedSVG = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="${targetDimensions.width}"
+     height="${targetDimensions.height}"
+     viewBox="0 0 ${targetDimensions.width} ${targetDimensions.height}">
+  <rect width="${targetDimensions.width}" height="${targetDimensions.height}" fill="${backgroundColor}"/>
+  <g transform="translate(${offsetX}, ${offsetY})">
+    ${this.extractSVGContent(svgString)}
+  </g>
+</svg>`;
+
+    return wrappedSVG;
+  }
+
+  /**
+   * Detect background color from SVG content
+   */
+  private detectSVGBackgroundColor(svgString: string): string {
+    // Look for background rect or common fill colors
+    const bgRectMatch = svgString.match(/<rect[^>]*fill=["']([^"']+)["'][^>]*>/);
+    if (bgRectMatch) {
+      return bgRectMatch[1];
+    }
+
+    // Look for most common fill color in the SVG
+    const fillMatches = svgString.matchAll(/fill=["']([^"']+)["']/g);
+    const fillColors = Array.from(fillMatches).map(m => m[1]);
+
+    if (fillColors.length > 0) {
+      // Return most common color or first color found
+      return fillColors[0];
+    }
+
+    // Default to white
+    return '#ffffff';
+  }
+
+  /**
+   * Extract inner content from SVG (everything inside <svg> tags)
+   */
+  private extractSVGContent(svgString: string): string {
+    // Remove XML declaration if present
+    const content = svgString.replace(/<\?xml[^>]*\?>/g, '');
+
+    // Extract content between <svg> and </svg>
+    const svgContentMatch = content.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+    if (svgContentMatch) {
+      return svgContentMatch[1].trim();
+    }
+
+    // If no match, return original (might be SVG fragment)
+    return content;
+  }
+
+  /**
+   * Optimize SVG using SVGO
+   */
+  private async optimizeSVG(svgString: string): Promise<string> {
+    try {
+      const { optimize } = await import('svgo');
+
+      const result = optimize(svgString, {
+        multipass: true,
+        plugins: [
+          {
+            name: 'preset-default',
+            params: {
+              overrides: {
+                // Don't remove viewBox - we need it for scaling
+                removeViewBox: false,
+                // Don't remove IDs that might be used
+                cleanupIds: false,
+              },
+            },
+          },
+        ],
+      });
+
+      return result.data;
+    } catch (error) {
+      console.warn('SVG optimization failed, returning unoptimized SVG:', error);
+      return svgString;
+    }
   }
 }
