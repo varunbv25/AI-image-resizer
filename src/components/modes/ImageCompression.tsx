@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
-import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
+import { BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle } from 'lucide-react';
 import JSZip from 'jszip';
@@ -44,7 +44,6 @@ export function ImageCompression({}: ImageCompressionProps) {
   // Batch processing state
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
-  const [totalProcessed, setTotalProcessed] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [batchProcessingStarted, setBatchProcessingStarted] = useState(false);
@@ -83,7 +82,6 @@ export function ImageCompression({}: ImageCompressionProps) {
 
   const handleBatchImageUpload = async (files: File[]) => {
     setIsBatchMode(true);
-    setTotalProcessed(0);
     setBatchProcessingStarted(false);
 
     // Store uploaded files
@@ -115,7 +113,6 @@ export function ImageCompression({}: ImageCompressionProps) {
 
   const processAllImages = async () => {
     setBatchProcessingStarted(true);
-    setTotalProcessed(0);
 
     // Process each file sequentially
     for (let i = 0; i < uploadedFiles.length; i++) {
@@ -173,8 +170,6 @@ export function ImageCompression({}: ImageCompressionProps) {
               }
             : item
         ));
-
-        setTotalProcessed(prev => prev + 1);
       } catch (error) {
         // Update item with error
         setBatchItems(prev => prev.map(item =>
@@ -186,8 +181,6 @@ export function ImageCompression({}: ImageCompressionProps) {
               }
             : item
         ));
-
-        setTotalProcessed(prev => prev + 1);
       }
     }
   };
@@ -249,8 +242,6 @@ export function ImageCompression({}: ImageCompressionProps) {
             }
           : item
       ));
-
-      setTotalProcessed(prev => prev + 1);
     } catch (error) {
       // Update item with error
       setBatchItems(prev => prev.map(item =>
@@ -262,8 +253,6 @@ export function ImageCompression({}: ImageCompressionProps) {
             }
           : item
       ));
-
-      setTotalProcessed(prev => prev + 1);
     }
   };
 
@@ -442,7 +431,6 @@ export function ImageCompression({}: ImageCompressionProps) {
     setComparisonPosition(50);
     setIsBatchMode(false);
     setBatchItems([]);
-    setTotalProcessed(0);
     setUploadedFiles([]);
     setSelectedImageId(null);
     setBatchProcessingStarted(false);

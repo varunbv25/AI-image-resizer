@@ -44,9 +44,6 @@ export class ImageProcessor {
       const sharp = await this.getSharp();
       const isSVGInput = await this.isSVG(imageBuffer);
 
-      // Track original format for potential preservation
-      const originalFormat = isSVGInput ? 'svg' : options.format;
-
       // For SVG files, convert to raster first for consistent processing
       let workingBuffer: Buffer = imageBuffer;
       if (isSVGInput) {
@@ -113,9 +110,6 @@ export class ImageProcessor {
 
       // Optimize for web
       const optimizedBuffer = await this.optimizeForWeb(processedBuffer, options);
-
-      // Get metadata
-      let finalFormat = options.format;
 
       // For SVG output, we don't need sharp metadata as it's already in SVG format
       if (options.format === 'svg') {
