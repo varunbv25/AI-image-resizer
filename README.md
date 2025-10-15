@@ -92,87 +92,532 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 
 ### SVG Processing
 
-The application provides comprehensive SVG support across all processing modes with intelligent handling for both input and output operations:
+The application provides comprehensive SVG support across all four processing modes with intelligent handling for input preprocessing, processing, and post-processing stages:
 
 #### Core SVG Features
-- **Input Support**: SVG files accepted in all four processing modes (AI Resizing, Manual Cropping, Upscaling, Compression)
+- **Universal Input Support**: SVG files accepted in all four processing modes (AI Resizing, Manual Cropping, Upscaling, Compression)
 - **Output Support**: Can output processed images as SVG format (embedded raster as base64 PNG in SVG wrapper)
 - **Format Detection**: Automatic MIME type detection (`image/svg+xml`) from base64 signatures
 - **High-Quality Conversion**: All processing uses 300 DPI density for superior raster output
+- **Consistent Handling**: Every function includes defensive SVG detection and conversion
 
-#### SVG Processing Pipeline
+#### SVG Processing by Mode
 
-**1. Input Detection & Conversion**
-- **Detection Method**: Header analysis for SVG signatures (`PHN2Zy`, `PD94bWwg` in base64, or `<svg`, `<?xml` in raw)
-- **Conversion Strategy**: Sharp.js with `density: 300` parameter for high-DPI rasterization
-- **Intermediate Format**: PNG for transparency and quality preservation
-- **All Functions Protected**: Every Sharp.js call includes `density: 300` parameter for consistent SVG handling
+All four processing modes follow a consistent three-stage pipeline for SVG handling:
 
-**2. Backend Processing (imageProcessor.ts)**
-- **Defensive SVG Handling**: All private functions detect and convert SVG to raster before processing
-- **Functions with SVG Protection**:
-  - `processWithNanoBanana` (line 160): AI processing with automatic SVG conversion
-  - `extendWithEdgeColorDetection` (line 261): Edge extension with SVG rasterization
-  - `detectDominantEdgeColor` (line 327): Color detection with SVG conversion
-  - `cropToExactDimensions` (line 439): Cropping with SVG handling
-  - `areImagesDifferent` (line 500): Image comparison with dual SVG conversion
-  - `convertToSVG` (line 592): Raster-to-SVG conversion for output
-  - `optimizeForWeb` (line 570): Web optimization with SVG input handling
-- **Automatic Detection**: Each function checks `isSVG()` and converts to PNG at 300 DPI before processing
-- **Consistent Parameters**: All `sharp()` calls use `{ limitInputPixels: 1000000000, density: 300 }`
+##### **1. AI Image Resizing Mode** (`/api/process` → `imageProcessor.ts`)
 
-**3. Frontend Preview Support**
-- **ImagePreview Component**: Dynamic MIME type support with `originalMimeType` and `processedMimeType` props
-- **Next.js Image Optimization**: `unoptimized={true}` flag for SVG images to prevent optimization issues
-- **All Modes Updated**: AI Resizing, Upscaling, Manual Cropping, and Compression components pass MIME types
-- **Format Conversion**: Automatic conversion between `svg` format string and `image/svg+xml` MIME type
+**Preprocessing (SVG Detection & Conversion)**:
+- Main entry: `processImage()` (imageProcessor.ts:36)
+- Detects SVG via header signature check (`<svg` or `<?xml`)
+- Converts SVG to PNG at 300 DPI before processing
+- Uses Sharp.js with `{ density: 300, limitInputPixels: 1000000000 }`
 
-**4. Manual Cropping Special Handling**
-- **Canvas CORS Configuration**: `img.crossOrigin = 'anonymous'` prevents tainted canvas with SVG
-- **Render Delay**: 200ms timeout after SVG load ensures complete rendering before canvas operations
-- **Natural Dimension Detection**: Uses `img.naturalWidth` and `img.naturalHeight` for actual rendered size
-- **Coordinate Scaling**: Calculates scale factors between specified and natural dimensions
-- **Algorithm**:
+**Processing (Core Functions with SVG Protection)**:
+- `processWithNanoBanana()` (imageProcessor.ts:156): AI processing with Gemini
+  - Defensive SVG handling: Converts SVG to raster before AI processing (lines 166-177)
+  - Ensures AI model receives consistent raster format
+- `extendWithEdgeColorDetection()` (imageProcessor.ts:260): Edge extension fallback
+  - SVG conversion to raster before edge color detection (lines 267-278)
+  - Creates canvas with detected edge color for background extension
+- `detectDominantEdgeColor()` (imageProcessor.ts:329): Background color detection
+  - Converts SVG to PNG before color sampling (lines 333-344)
+  - Samples all four edges for accurate color detection
+- `cropToExactDimensions()` (imageProcessor.ts:453): Precision cropping
+  - SVG rasterization before crop operation (lines 459-470)
+  - Center-crop algorithm with scale calculation
+- `areImagesDifferent()` (imageProcessor.ts:502): Image comparison utility
+  - Dual SVG conversion for both original and processed buffers (lines 506-530)
+  - Statistical comparison of raster images
+
+**Post-Processing (Output Handling)**:
+- `optimizeForWeb()` (imageProcessor.ts:570): Format conversion and optimization
+  - SVG input detection before output format conversion (lines 576-587)
+  - Supports JPEG, PNG, WebP, and SVG output formats
+- `convertToSVG()` (imageProcessor.ts:606): Raster-to-SVG wrapper
+  - Converts raster to SVG by embedding as base64 data URI (lines 606-645)
+  - Preserves dimensions in SVG viewBox attributes
+
+##### **2. Manual Cropping Mode** (`/api/compress`)
+
+**Preprocessing (SVG Detection & Conversion)**:
+- Route handler: `/api/compress/route.ts:70-84`
+- Header-based SVG detection: Checks for `<svg` or `<?xml` signatures
+- Immediate conversion to PNG at 300 DPI before cropping
+- Code snippet:
+  ```typescript
+  const header = buffer.slice(0, 100).toString('utf-8');
+  const isSVG = header.includes('<svg') || header.includes('<?xml');
+  if (isSVG) {
+    workingBuffer = await sharp(buffer, { density: 300, limitInputPixels: 1000000000 })
+      .png().toBuffer();
+  }
+  ```
+
+**Processing (Cropping Operation)**:
+- Sharp.js cropping with quality preservation (quality: 80-85)
+- CloudConvert fallback with same SVG preprocessing
+- Supports batch processing with per-image settings
+
+**Post-Processing (Output)**:
+- Format conversion to JPEG, PNG, or WebP
+- Maintains aspect ratio and exact dimensions
+- Compression ratio calculation and metadata generation
+
+**Frontend SVG Handling**:
+- Canvas CORS configuration: `img.crossOrigin = 'anonymous'`
+- 200ms render delay after SVG load for complete rendering
+- Natural dimension detection: `img.naturalWidth` and `img.naturalHeight`
+- Coordinate scaling between specified and natural dimensions:
   ```javascript
   const scaleX = img.naturalWidth / uploadedImage.originalDimensions.width;
   const scaleY = img.naturalHeight / uploadedImage.originalDimensions.height;
-  const adjustedCropX = cropX * scaleX;
-  const adjustedCropY = cropY * scaleY;
   ```
-- **Transparency Handling**: White background fill before drawing SVG to canvas
-- **Batch Mode Support**: Same SVG handling in both single and batch cropping modes
+- White background fill before drawing SVG to canvas
 
-**5. SVG Output Format**
-- **Output Method**: Converts processed raster images to SVG by embedding PNG as base64 data URI
-- **SVG Structure**:
-  ```xml
-  <svg xmlns="http://www.w3.org/2000/svg" width="W" height="H" viewBox="0 0 W H">
-    <image width="W" height="H" xlink:href="data:image/png;base64,..."/>
-  </svg>
+##### **3. Upscaling Mode** (`/api/upscale`)
+
+**Preprocessing (SVG Detection & Conversion)**:
+- Function: `upscaleImage()` (route.ts:33)
+- SVG detection at lines 49-63
+- Converts SVG to PNG at 300 DPI before upscaling
+- Code snippet:
+  ```typescript
+  const header = imageBuffer.slice(0, 100).toString('utf-8');
+  const isSVG = header.includes('<svg') || header.includes('<?xml');
+  if (isSVG) {
+    workingBuffer = await sharp(imageBuffer, { density: 300, limitInputPixels: 1000000000 })
+      .png().toBuffer();
+  }
   ```
-- **Dimension Preservation**: Maintains exact target dimensions in SVG viewBox and image attributes
-- **Format Selection**: Available as output format option alongside JPEG, PNG, and WebP
 
-#### SVG Technical Implementation
+**Processing (Upscaling Operation)**:
+- Lanczos3 kernel for high-quality interpolation
+- Minimum scale factor: 1.1x (10% enlargement)
+- Maximum scale factor: 4x (400% enlargement)
+- Dimension validation: Ensures target ≥ original dimensions
+- Progressive JPEG encoding for optimized web delivery
 
-**Backend Functions**:
-- All Sharp.js operations include density parameter: `sharp(buffer, { density: 300, limitInputPixels: 1000000000 })`
+**Post-Processing (Output)**:
+- Format conversion: JPEG (progressive), PNG, or WebP
+- Quality settings preserved (default: 80%)
+- Metadata extraction with final dimensions
+- Batch processing support with per-image settings
+
+##### **4. Image Compression Mode** (`/api/compress-image`)
+
+**Preprocessing (SVG Detection & Conversion)**:
+- Function: `compressImage()` (route.ts:13)
+- SVG detection at lines 20-34
+- Converts SVG to PNG at 300 DPI before compression
+- Code snippet:
+  ```typescript
+  const header = buffer.slice(0, 100).toString('utf-8');
+  const isSVG = header.includes('<svg') || header.includes('<?xml');
+  if (isSVG) {
+    workingBuffer = await sharp(buffer, { density: 300, limitInputPixels: 1000000000 })
+      .png().toBuffer();
+  }
+  ```
+
+**Processing (Compression Operation)**:
+- Initial compression with optimal quality (80% for JPEG/WebP, level 9 for PNG)
+- Iterative quality reduction algorithm:
+  - Starts at 80% quality
+  - Reduces by 10% per iteration if size exceeds target
+  - Maximum 10 attempts, minimum 10% quality threshold
+- Format-specific compression:
+  - JPEG: MozJPEG with progressive encoding
+  - PNG: Compression level 9 with palette optimization
+  - WebP: 80% quality compression
+
+**Post-Processing (Output)**:
+- Compression ratio calculation
+- File size comparison (original vs compressed vs target)
+- Quality metadata included in response
+- Batch processing with per-image target sizes
+
+#### SVG Technical Implementation Summary
+
+**Common Preprocessing Pattern** (Used in All 4 Modes):
+```typescript
+// SVG Detection
+const header = buffer.slice(0, 100).toString('utf-8');
+const isSVG = header.includes('<svg') || header.includes('<?xml');
+
+// Conversion to Raster (300 DPI)
+if (isSVG) {
+  workingBuffer = await sharp(buffer, {
+    density: 300,
+    limitInputPixels: 1000000000
+  }).png().toBuffer();
+}
+```
+
+**Backend Functions** (imageProcessor.ts):
+- All Sharp.js operations include: `sharp(buffer, { density: 300, limitInputPixels: 1000000000 })`
 - SVG detection before every processing operation
 - Automatic PNG conversion at 300 DPI when SVG detected
-- `convertToSVG()` helper for output format conversion
+- Consistent error handling and fallback strategies
 
 **Frontend Components**:
 - `ImagePreview.tsx`: Dynamic MIME type handling with `unoptimized` prop for SVG
 - `AIImageResizing.tsx`: Passes `uploadedImage.mimetype` and processed format MIME type
 - `Upscaling.tsx`: Converts `svg` format to `image/svg+xml` for display
-- `ManualCropping.tsx`: Advanced canvas SVG rendering with scaling and CORS
-- All mode components: Updated footer text to include SVG format support
+- `ManualCropping.tsx`: Advanced canvas SVG rendering with scaling and CORS handling
+- All mode components: Updated to support SVG format in footer text and format selectors
 
 **Quality Considerations**:
 - **High DPI Conversion**: 300 DPI ensures no quality loss during SVG rasterization
-- **Format Preservation**: Original SVG structure preserved in output when SVG format selected
+- **Format Preservation**: Original SVG structure can be preserved in output when SVG format selected
 - **Canvas Rendering**: Special handling prevents black boxes or blank outputs in manual cropping
 - **Cross-Browser**: CORS and timing strategies ensure compatibility across all modern browsers
+- **Consistent Pipeline**: All four modes use identical preprocessing logic for predictable results
+
+---
+
+### Raster Image Format Processing (JPEG, PNG, WebP)
+
+The application provides comprehensive support for raster formats (JPEG, PNG, WebP) across all four processing modes with format-specific optimizations:
+
+#### Supported Raster Formats
+- **JPEG/JPG**: Industry-standard lossy compression for photographs and natural images
+- **PNG**: Lossless compression with transparency support, ideal for graphics and screenshots
+- **WebP**: Modern format with superior compression, supporting both lossy and lossless modes
+- **Input Formats**: JPEG, PNG, WebP accepted in all modes
+- **Output Formats**: JPEG, PNG, WebP available in all modes (format conversion supported)
+
+#### Format Processing by Mode
+
+All four processing modes handle raster formats with format-specific preprocessing, processing, and post-processing:
+
+##### **1. AI Image Resizing Mode** - Raster Format Handling
+
+**Preprocessing (Format Detection & Preparation)**:
+- **Entry Point**: `processImage()` (imageProcessor.ts:36)
+- **Format Detection**: Sharp.js automatic format detection from buffer headers
+- **Metadata Extraction**: Width, height, channels, color space using `sharp().metadata()`
+- **Buffer Validation**: Ensures buffer integrity and supported format
+- **No Conversion Needed**: Raster formats processed directly without intermediate conversion
+
+**Processing (Core Operations)**:
+1. **AI Processing Path** (`processWithNanoBanana` - imageProcessor.ts:156):
+   - **Input**: JPEG, PNG, or WebP buffer
+   - **Format Conversion**: Converts to JPEG for AI model input
+   - **AI Model**: Gemini 2.5 Flash Image accepts JPEG format
+   - **Process**:
+     ```typescript
+     // Detect image format
+     const metadata = await sharp(workingBuffer).metadata();
+     const imageFormat = metadata.format || 'jpeg';
+     // Convert to base64 for AI
+     const base64Image = imageData.toString('base64');
+     // Send to Gemini with detected MIME type
+     mimeType: `image/${imageFormat}`
+     ```
+   - **Output**: AI returns JPEG buffer
+
+2. **Edge Extension Path** (`extendWithEdgeColorDetection` - imageProcessor.ts:260):
+   - **Input**: Any raster format (JPEG/PNG/WebP)
+   - **Edge Sampling**: Extracts edge pixels from all four sides (3% thickness)
+   - **Color Detection**: `detectDominantEdgeColor()` calculates weighted RGB average
+   - **Canvas Creation**: Creates new canvas with detected background color
+   - **Compositing**: Centers original image using Sharp.js `.composite()`
+   - **Output**: JPEG buffer (quality: 90)
+
+3. **Dimension Adjustment** (`cropToExactDimensions` - imageProcessor.ts:453):
+   - **Scale Calculation**: `scale = max(targetWidth/originalWidth, targetHeight/originalHeight)`
+   - **Resize**: Scales image using calculated factor
+   - **Extract**: Center-crops to exact dimensions
+   - **Output**: JPEG buffer (quality: 90)
+
+**Post-Processing (Format Optimization)** (`optimizeForWeb` - imageProcessor.ts:570):
+- **JPEG Output**:
+  - Quality: User-specified or default 80%
+  - Progressive encoding: Enabled for faster web loading
+  - Code: `sharpInstance.jpeg({ quality: options.quality })`
+- **PNG Output**:
+  - Quality: User-specified or default 80%
+  - Compression: Automatic optimization
+  - Code: `sharpInstance.png({ quality: options.quality })`
+- **WebP Output**:
+  - Quality: User-specified or default 80%
+  - Compression: Modern VP8/VP8L codec
+  - Code: `sharpInstance.webp({ quality: options.quality })`
+
+##### **2. Manual Cropping Mode** - Raster Format Handling
+
+**Preprocessing (Format Detection & Validation)**:
+- **Route**: `/api/compress/route.ts`
+- **File Reception**: Accepts multipart/form-data with image file
+- **Format Detection**: Automatic detection via Sharp.js metadata
+- **Buffer Creation**: `Buffer.from(bytes)` from ArrayBuffer
+- **No Special Conversion**: Raster formats used directly
+
+**Processing (Cropping Operation)**:
+1. **Primary Method** - Sharp.js Cropping:
+   ```typescript
+   let sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
+   ```
+   - **Format-Specific Handling**:
+     - **JPEG**: `sharpInstance.jpeg({ quality: qualityValue, mozjpeg: true })`
+       - MozJPEG encoder for superior compression
+       - Quality: User-specified or default 80%
+     - **PNG**: `sharpInstance.png({ quality: qualityValue, compressionLevel: 9 })`
+       - Maximum compression level (9)
+       - Lossless compression maintained
+     - **WebP**: `sharpInstance.webp({ quality: qualityValue })`
+       - Quality: User-specified or default 80%
+
+2. **Fallback Method** - CloudConvert API:
+   - **Optimal Settings Detection**: `getOptimalWebSettings(file.size, file.type)`
+   - **Compression Options**: Format-specific optimization
+   - **Quality Adjustment**: Based on original file size and format
+
+**Post-Processing (Output Generation)**:
+- **Format Conversion**: Supports cross-format conversion (e.g., PNG → JPEG)
+- **Metadata Generation**:
+  - Original size vs compressed size
+  - Compression ratio calculation
+  - MIME type: `image/${format}`
+- **Base64 Encoding**: For frontend preview and download
+- **Batch Support**: Per-image format settings
+
+##### **3. Upscaling Mode** - Raster Format Handling
+
+**Preprocessing (Format Detection & Validation)**:
+- **Function**: `upscaleImage()` (route.ts:33)
+- **Format Detection**: Header-based format detection
+- **Metadata Extraction**:
+  ```typescript
+  const originalMetadata = await sharp(workingBuffer, {
+    limitInputPixels: 1000000000
+  }).metadata();
+  const originalWidth = originalMetadata.width || 0;
+  const originalHeight = originalMetadata.height || 0;
+  ```
+- **Dimension Validation**: Ensures target ≥ original dimensions
+- **Scale Validation**: Minimum 1.1x, maximum 4x
+
+**Processing (Upscaling Operation)**:
+1. **Lanczos3 Resampling** (High-Quality Interpolation):
+   ```typescript
+   const processedBuffer = await sharp(workingBuffer, {
+     limitInputPixels: 1000000000
+   })
+     .resize(targetDimensions.width, targetDimensions.height, {
+       kernel: 'lanczos3',  // 3-lobe Lanczos windowed sinc filter
+       fit: 'fill'
+     })
+     .jpeg({ quality, progressive: true })
+     .toBuffer();
+   ```
+   - **Kernel**: Lanczos3 (6×6 pixel neighborhood)
+   - **Quality**: Superior edge preservation and sharpness
+   - **Performance**: Optimized C++ implementation via libvips
+
+2. **Format-Specific Processing**:
+   - **All Formats**: Initial processing produces JPEG at specified quality
+   - **Progressive Encoding**: Enabled for JPEG output
+   - **Multi-pass Rendering**: Faster perceived loading for web
+
+**Post-Processing (Format Optimization)**:
+- **JPEG Output**:
+  ```typescript
+  finalBuffer = await sharpInstance.jpeg({ quality, progressive: true }).toBuffer();
+  ```
+  - Progressive scan encoding
+  - Quality: User-specified (default 80%)
+  - Optimized Huffman tables
+- **PNG Output**:
+  ```typescript
+  finalBuffer = await sharpInstance.png({ quality }).toBuffer();
+  ```
+  - Lossless compression
+  - Quality affects filtering, not compression
+  - Optimal for upscaled graphics
+- **WebP Output**:
+  ```typescript
+  finalBuffer = await sharpInstance.webp({ quality }).toBuffer();
+  ```
+  - Modern compression algorithm
+  - Better quality-to-size ratio than JPEG
+  - Quality: User-specified (default 80%)
+
+##### **4. Image Compression Mode** - Raster Format Handling
+
+**Preprocessing (Format Detection & Analysis)**:
+- **Function**: `compressImage()` (route.ts:13)
+- **Base64 Decoding**: Strips data URI prefix and decodes
+  ```typescript
+  const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+  const buffer = Buffer.from(base64Data, 'base64');
+  ```
+- **Format Detection**:
+  ```typescript
+  const metadata = await sharp(buffer, {
+    limitInputPixels: 1000000000
+  }).metadata();
+  const format = metadata.format || 'jpeg';
+  ```
+- **Size Analysis**: Original file size stored for compression ratio calculation
+
+**Processing (Iterative Compression Algorithm)**:
+1. **Initial Compression** (Quality: 80% / Level 9):
+   - **JPEG**:
+     ```typescript
+     return image.jpeg({
+       quality: 80,
+       mozjpeg: true,        // MozJPEG encoder
+       progressive: true      // Progressive scan
+     }).toBuffer();
+     ```
+     - MozJPEG: Optimized JPEG encoding with trellis quantization
+     - Progressive: Multi-scan encoding for faster web loading
+     - Huffman Tables: Optimized for better compression
+
+   - **PNG**:
+     ```typescript
+     return image.png({
+       compressionLevel: 9,   // Maximum compression
+       palette: true          // Palette optimization
+     }).toBuffer();
+     ```
+     - DEFLATE compression: Lossless algorithm
+     - Level 9: Maximum compression effort
+     - Palette: Reduces file size for images with limited colors
+     - Optimal filtering: Automatic selection of best filter type
+
+   - **WebP**:
+     ```typescript
+     return image.webp({
+       quality: 80
+     }).toBuffer();
+     ```
+     - VP8/VP8L codec: Modern lossy compression
+     - Block-based prediction: Better than JPEG at equivalent quality
+     - Transform coding: Efficient frequency domain compression
+
+2. **Iterative Quality Reduction**:
+   ```typescript
+   let currentQuality = 80;
+   let attempts = 0;
+   const maxAttempts = 10;
+
+   while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
+     currentQuality = Math.max(10, currentQuality - 10);
+     compressedBuffer = await compressImage(buffer, format, currentQuality);
+     attempts++;
+   }
+   ```
+   - **Algorithm**: Linear quality reduction
+   - **Step Size**: 10% per iteration
+   - **Minimum Quality**: 10%
+   - **Maximum Attempts**: 10 iterations
+   - **Stop Conditions**:
+     - `outputSize ≤ targetSize` (success)
+     - `quality ≤ 10%` (minimum reached)
+     - `attempts ≥ 10` (max iterations)
+
+**Post-Processing (Output & Metadata)**:
+- **Compression Ratio Calculation**:
+  ```typescript
+  const compressionRatio = Math.round(
+    ((originalSize - compressedBuffer.length) / originalSize) * 100
+  );
+  ```
+- **Format Conversion**: Automatic MIME type adjustment
+  - `jpeg` → `image/jpeg`
+  - `jpg` → `image/jpeg`
+  - `png` → `image/png`
+  - `webp` → `image/webp`
+- **Base64 Encoding**: With proper data URI prefix
+- **Metadata Response**:
+  ```json
+  {
+    "imageData": "data:image/jpeg;base64,...",
+    "size": 819200,
+    "compressionRatio": 60,
+    "quality": 70,
+    "format": "jpeg"
+  }
+  ```
+
+#### Format-Specific Technical Details
+
+**JPEG Processing Characteristics**:
+- **Best For**: Photographs, natural images, gradients
+- **Compression**: Lossy, DCT-based
+- **Quality Range**: 10-100 (80 default)
+- **Special Features**:
+  - MozJPEG encoder: 5-10% smaller files than standard JPEG
+  - Progressive encoding: Faster perceived loading
+  - Trellis quantization: Better quality at same file size
+  - Optimized Huffman tables: Improved compression
+- **Color Space**: RGB or YCbCr (automatic conversion)
+- **Transparency**: Not supported (alpha channel removed)
+
+**PNG Processing Characteristics**:
+- **Best For**: Graphics, logos, screenshots, images with transparency
+- **Compression**: Lossless, DEFLATE-based
+- **Compression Level**: 0-9 (9 maximum, default)
+- **Special Features**:
+  - Palette optimization: Reduces colors for smaller file size
+  - Adaptive filtering: 5 filter types (None, Sub, Up, Average, Paeth)
+  - Interlacing: Optional (Adam7 algorithm)
+  - Zlib compression: Gzip-style DEFLATE
+- **Color Space**: RGB, RGBA, Grayscale, Indexed
+- **Transparency**: Full alpha channel support (8-bit)
+
+**WebP Processing Characteristics**:
+- **Best For**: Web images, modern browsers, balanced quality/size
+- **Compression**: Lossy (VP8) or Lossless (VP8L)
+- **Quality Range**: 0-100 (80 default)
+- **Special Features**:
+  - VP8 codec: Better than JPEG at equivalent quality
+  - VP8L codec: Better than PNG for certain images
+  - Block-based prediction: 4×4 pixel blocks
+  - Transform coding: WHT (Walsh-Hadamard Transform)
+  - 25-35% smaller than JPEG at equivalent quality
+- **Color Space**: YUV420 (lossy) or RGB (lossless)
+- **Transparency**: Full alpha channel support
+
+#### Cross-Format Conversion Support
+
+All four modes support seamless format conversion:
+
+| Input Format | Output Formats Available | Conversion Method |
+|--------------|-------------------------|-------------------|
+| JPEG | JPEG, PNG, WebP, SVG | Direct Sharp.js conversion |
+| PNG | JPEG, PNG, WebP, SVG | Direct Sharp.js conversion |
+| WebP | JPEG, PNG, WebP, SVG | Direct Sharp.js conversion |
+| SVG | JPEG, PNG, WebP, SVG | Rasterize at 300 DPI → Convert |
+
+**Conversion Quality Preservation**:
+- **Lossless → Lossy**: Quality setting controls compression amount
+- **Lossy → Lossless**: Preserves existing quality (no improvement)
+- **Lossy → Lossy**: Single-pass conversion minimizes quality loss
+- **Alpha Channel**: Preserved in PNG/WebP, removed in JPEG (white background)
+
+#### Performance Characteristics by Format
+
+**Processing Speed** (Relative, 1920×1080 image):
+- **JPEG**: Fastest (baseline: 1.0x)
+- **WebP**: Medium (1.3-1.5x slower than JPEG)
+- **PNG**: Slowest (2-3x slower than JPEG)
+- **SVG**: Variable (depends on complexity, ~2-4x slower)
+
+**File Size** (Typical, 1920×1080 photograph):
+- **JPEG (Q80)**: 200-400 KB (baseline)
+- **WebP (Q80)**: 150-300 KB (25-30% smaller)
+- **PNG (L9)**: 1-3 MB (5-10x larger, lossless)
+- **SVG**: N/A (vector format)
+
+**Memory Usage** (Processing Buffer):
+- **All Formats**: Proportional to pixel count
+- **Typical 1920×1080**: ~8-16 MB RAM during processing
+- **Large Images**: Up to 100 MB for 8K images
+- **Batch Processing**: Sequential to limit memory usage
 
 ### AI Image Resizing Algorithms
 
@@ -817,80 +1262,30 @@ ai-image-resizer/
 
 ### Component Architecture
 
-```mermaid
-graph TD
-    A[Main Page] --> B[Mode Selection]
-    B --> C[AI Image Resizing]
-    B --> D[Manual Cropping]
-    B --> E[Upscaling]
-    B --> F[Image Compression]
-
-    C --> G[ImageUploader]
-    C --> H[DimensionSelector]
-    C --> I[ImagePreview]
-    C --> J[ProcessingStatus]
-
-    D --> K[ImageUploader]
-    D --> L[Interactive Canvas]
-    D --> M[Crop Controls]
-    D --> N[Zoom Controls]
-    D --> O[Sidebar with Batch Items]
-
-    E --> P[ImageUploader]
-    E --> Q[Sidebar with Batch Items]
-    E --> R[Scale Selector]
-    E --> S[Quality Controls]
-    E --> T[Batch Actions]
-
-    F --> U[ImageUploader]
-    F --> V[Sidebar with Batch Items]
-    F --> W[Target Size Slider]
-    F --> X[Batch Actions]
-    F --> Y[Preview & Stats]
-
-    Q --> Z[Batch Item List]
-    V --> Z
-    O --> Z
-
-    Z --> AA[Image Thumbnails]
-    Z --> AB[Status Icons]
-    Z --> AC[Per-Image Settings]
-
-    G --> AD[useFileUpload Hook]
-    K --> AD
-    P --> AD
-    U --> AD
-
-    I --> AE[useImageProcessing Hook]
-    M --> AF[Manual Crop Logic]
-    T --> AG[useUpscaling Hook]
-    X --> AH[Compression Logic]
-
-    AD --> AI[File Handler]
-    AE --> AJ[AI Image Processor]
-    AF --> AK[Crop Processor]
-    AG --> AL[Upscale Processor]
-    AH --> AM[Compression Processor]
-
-    AI --> AN[Upload API]
-    AJ --> AO[Process API]
-    AK --> AP[Compress API]
-    AL --> AQ[Upscale API]
-    AM --> AR[Compress-Image API]
-
-    AO --> AS[Gemini AI]
-    AO --> AT[Sharp.js Edge Extension]
-    AP --> AU[Sharp.js Cropping]
-    AQ --> AV[Advanced Interpolation]
-    AQ --> AW[Detail Enhancement]
-    AR --> AX[MozJPEG/PNG/WebP Compression]
-    AR --> AY[Iterative Quality Adjustment]
-
-    T --> AZ[JSZip for Batch Download]
-    X --> AZ
-```
+> **📊 Component Architecture Diagram**
+>
+> For the complete interactive component architecture diagram, see the **[Component Architecture section in DATAFLOW_DIAGRAMS.md](./DATAFLOW_DIAGRAMS.md#component-architecture)**.
+>
+> The diagram shows:
+> - All four processing modes and their relationships
+> - Shared components (ImageUploader, Batch Processor, etc.)
+> - Custom React hooks (useFileUpload, useImageProcessing, useUpscaling)
+> - API endpoints and their connections
+> - External services (Gemini AI, Sharp.js processing)
+> - Data flow between frontend and backend layers
 
 ### Detailed Data Flow Diagrams
+
+> **📊 Interactive Mermaid Diagrams Available!**
+> For comprehensive, interactive data flow diagrams with detailed format-specific processing flows, see **[DATAFLOW_DIAGRAMS.md](./DATAFLOW_DIAGRAMS.md)**.
+> The Mermaid diagrams include:
+> - Complete component architecture
+> - Detailed processing flows for all 4 modes
+> - Format-specific algorithm flows (SVG, JPEG, PNG, WebP)
+> - Integration diagrams
+> - Automatically rendered on GitHub and compatible documentation platforms
+
+The following ASCII diagrams provide a quick reference:
 
 #### AI Image Resizing Flow
 ```
