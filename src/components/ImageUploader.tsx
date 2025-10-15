@@ -67,6 +67,11 @@ export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, 
             <p className="text-sm text-gray-500">
               Supports JPEG, PNG, WebP and SVG{supportsBatch && ' • Multiple files supported'}
             </p>
+            {!isUploading && (
+              <p className="text-xs text-gray-400 mt-2">
+                Large images will be automatically compressed to ensure smooth upload
+              </p>
+            )}
           </div>
 
           {!isUploading && (

@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { ImageDimensions, APIResponse } from '@/types';
 import { safeJsonParse } from '@/lib/safeJsonParse';
+import { compressImage, formatFileSize, calculateCompressionRatio } from '@/lib/clientImageCompression';
 
 interface UploadedImageData {
   filename: string;
@@ -22,8 +23,29 @@ export function useFileUpload() {
     setError(null);
 
     try {
+      const originalSize = file.size;
+      console.log(`Original file size: ${formatFileSize(originalSize)}`);
+
+      // Compress image before upload to prevent payload size errors
+      // Max 3MB to ensure compatibility with most platforms (Vercel 4.5MB limit)
+      // Base64 encoding adds ~33% overhead, so 3MB file → ~4MB base64
+      let fileToUpload = file;
+
+      if (originalSize > 3 * 1024 * 1024) { // If larger than 3MB
+        console.log('Compressing image before upload...');
+        fileToUpload = await compressImage(file, {
+          maxSizeMB: 3,
+          maxWidthOrHeight: 4096,
+          quality: 0.8,
+        });
+
+        const compressedSize = fileToUpload.size;
+        const ratio = calculateCompressionRatio(originalSize, compressedSize);
+        console.log(`Compressed to: ${formatFileSize(compressedSize)} (${ratio}% reduction)`);
+      }
+
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('image', fileToUpload);
 
       const response = await fetch('/api/upload', {
         method: 'POST',

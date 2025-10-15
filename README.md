@@ -1277,31 +1277,80 @@ ai-image-resizer/
 
 ### Large Image Upload Architecture
 
-The application supports large image uploads through a custom request parsing system:
+The application supports large image uploads through a multi-layer approach combining client-side compression and server-side request parsing:
 
-**Request Handling Pipeline**:
-1. **Custom JSON Parser** (`src/lib/requestHelper.ts`):
-   - `parseJsonBody<T>()`: Parses JSON payloads up to 100MB (configurable)
-   - Bypasses Next.js default ~1MB limit for `req.json()`
-   - Validates payload size before parsing
-   - Returns user-friendly error messages (HTTP 413) when limits exceeded
+**1. Client-Side Compression** (`src/lib/clientImageCompression.ts`):
+   - **Automatic Compression**: Images > 3MB are automatically compressed before upload
+   - **Quality Preservation**: Uses 80% quality with high-quality canvas smoothing
+   - **Dimension Limiting**: Maximum 4096px width/height to prevent excessive payloads
+   - **Base64 Overhead Protection**: 3MB limit ensures ~4MB after base64 encoding (33% overhead)
+   - **Iterative Quality Reduction**: Automatically reduces quality if file still too large
+   - **User Feedback**: Console logs show compression ratio and file size reduction
 
-2. **API Route Integration**:
+**2. Request Handling Pipeline** (`src/lib/requestHelper.ts`):
+   - **Custom JSON Parser**: `parseJsonBody<T>()` parses JSON payloads up to 100MB (configurable)
+   - **Bypasses Next.js Limits**: Overcomes default ~1MB limit for `req.json()`
+   - **Size Validation**: Validates payload size before parsing
+   - **User-Friendly Errors**: Returns HTTP 413 with clear error messages when limits exceeded
+
+**3. API Route Integration**:
    - All 4 API routes use `parseJsonBody()` instead of `req.json()`
    - Routes: `/api/process`, `/api/compress`, `/api/upscale`, `/api/compress-image`
    - Error handling for payload size errors with clear user feedback
    - Base64 image data support (images increase ~33% in size when encoded)
 
-3. **Platform Considerations**:
-   - **Local Development**: Supports up to 100MB through custom parser
+**4. Platform Considerations**:
+   - **Local Development**: Supports up to 100MB through custom parser + compression
    - **Self-Hosted**: Configurable via `NODE_OPTIONS="--max-http-header-size=100000000"`
-   - **Vercel**: 4.5MB limit (Hobby/Pro plans require upgrade or alternative approach)
+   - **Vercel (Recommended)**: Client-side compression keeps payloads under 4.5MB limit
    - **Railway/Cloudflare**: 100MB support with proper configuration
-   - **AWS Lambda**: 6MB hard limit (use S3 presigned URLs as alternative)
+   - **AWS Lambda**: 6MB hard limit (client-side compression handles most cases)
 
 **Implementation Details**:
+
 ```typescript
-// src/lib/requestHelper.ts
+// src/lib/clientImageCompression.ts - Client-side compression
+export async function compressImage(
+  file: File,
+  options: CompressionOptions = {}
+): Promise<File> {
+  const { maxSizeMB = 3, maxWidthOrHeight = 4096, quality = 0.8 } = options;
+
+  // Create canvas and resize image
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Draw and compress
+  canvas.toBlob(
+    (blob) => new File([blob], file.name, { type: file.type }),
+    file.type,
+    quality
+  );
+}
+
+// src/hooks/useFileUpload.ts - Usage in upload hook
+const uploadFile = async (file: File) => {
+  let fileToUpload = file;
+
+  if (file.size > 3 * 1024 * 1024) {
+    // Compress if > 3MB
+    fileToUpload = await compressImage(file, {
+      maxSizeMB: 3,
+      maxWidthOrHeight: 4096,
+      quality: 0.8,
+    });
+  }
+
+  const formData = new FormData();
+  formData.append('image', fileToUpload);
+  // Upload compressed file...
+};
+```
+
+```typescript
+// src/lib/requestHelper.ts - Server-side parsing
 export async function parseJsonBody<T>(
   request: Request,
   maxSize: number = 100 * 1024 * 1024 // 100MB default
@@ -1829,17 +1878,22 @@ npx tsc --noEmit
    - For SVG files, ensure they have valid width/height attributes or viewBox
 
 2a. **"Request Entity Too Large" Error**
-   - This error occurs when the image payload exceeds server limits
-   - The application supports up to 100MB payloads through custom parsing
+   - **Automatic Protection**: Images > 3MB are automatically compressed client-side
+   - The application uses client-side compression to prevent payload errors
+   - **Client-Side Compression**:
+     - Automatically compresses images > 3MB before upload
+     - Uses 80% quality with 4096px max dimension
+     - Prevents payloads from exceeding platform limits
+     - Console logs show compression details
+   - **If Still Getting Errors**:
+     - Image may be extremely large - try reducing source file size
+     - Check browser console for compression errors
+     - Try reducing image dimensions before upload
    - **Deployment Platform Limits**:
-     - **Vercel**: 4.5MB limit (upgrade to Pro for higher limits)
+     - **Vercel**: 4.5MB limit (client compression prevents issues)
      - **Self-hosted**: Configure `NODE_OPTIONS="--max-http-header-size=100000000"`
      - **See DEPLOYMENT.md** for platform-specific configuration
-   - **Workarounds**:
-     - Reduce image file size before upload (recommended: 5-10MB max)
-     - Compress images client-side before processing
-     - Use smaller batch sizes
-   - **Note**: Base64 encoding increases size by ~33%
+   - **Note**: Base64 encoding increases size by ~33% (handled by compression)
 
 3. **AI Processing Issues**
    - Large images may take longer to process

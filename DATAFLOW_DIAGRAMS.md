@@ -589,11 +589,24 @@ flowchart TD
 
 ## Large Image Upload Flow
 
-Detailed flow showing how large image payloads are handled across all API routes.
+Detailed flow showing how large image payloads are handled with client-side compression and server-side parsing.
 
 ```mermaid
 flowchart TD
-    Start([User Uploads Image<br/>via Frontend]) --> Encode[Encode Image to Base64<br/>~33% size increase]
+    Start([User Uploads Image<br/>via Frontend]) --> CheckSize{File Size<br/>> 3MB?}
+
+    CheckSize -->|No| Encode[Encode to Base64<br/>~33% size increase]
+    CheckSize -->|Yes| Compress[Client-Side Compression<br/>src/lib/clientImageCompression.ts]
+
+    Compress --> CompressDetails[Compress Image<br/>- Max: 3MB<br/>- Max dimension: 4096px<br/>- Quality: 80%<br/>- Canvas smoothing: high]
+
+    CompressDetails --> CheckCompressed{Compressed<br/>Size OK?}
+
+    CheckCompressed -->|Still too large| LowerQuality[Reduce Quality<br/>by 10%<br/>Retry compression]
+    CheckCompressed -->|Success| LogCompression[Log Compression Stats<br/>- Original size<br/>- Compressed size<br/>- Compression ratio]
+
+    LowerQuality --> CompressDetails
+    LogCompression --> Encode
 
     Encode --> SendAPI[Send POST Request<br/>to API Route]
 
@@ -649,6 +662,9 @@ flowchart TD
     FrontendSuccess --> End
 
     style Start fill:#90EE90
+    style Compress fill:#FFD700
+    style CompressDetails fill:#FFE44D
+    style LogCompression fill:#98FB98
     style CustomParser fill:#87CEEB
     style Return413 fill:#FF6B6B
     style Return400 fill:#FF6B6B
@@ -657,43 +673,84 @@ flowchart TD
     style End fill:#FFB6C1
 ```
 
+### Client-Side Compression Details
+
+The application automatically compresses large images before upload to prevent payload size errors:
+
+**When Compression Triggers**:
+- File size > 3MB
+- Automatic, transparent to user
+- Logs compression stats to console
+
+**Compression Settings**:
+- **Max Size**: 3MB (ensures ~4MB after base64 encoding)
+- **Max Dimension**: 4096px width/height
+- **Quality**: 80% (high quality preserved)
+- **Smoothing**: High-quality canvas smoothing enabled
+- **Iterative**: Reduces quality by 10% if still too large
+
+**Benefits**:
+- ✅ Prevents "Request Entity Too Large" errors on all platforms
+- ✅ Works with Vercel's 4.5MB payload limit
+- ✅ Maintains image quality (80%+)
+- ✅ Faster uploads (smaller files)
+- ✅ No user intervention required
+
+**Files Involved**:
+- `src/lib/clientImageCompression.ts` - Compression utility
+- `src/hooks/useFileUpload.ts` - Upload hook with compression
+- `src/components/ImageUploader.tsx` - Visual feedback
+
+```
+
 ### Platform-Specific Payload Limits
 
-Different deployment platforms have varying payload size limits:
+Different deployment platforms have varying payload size limits. **With client-side compression**, all platforms work reliably:
 
 ```mermaid
 graph LR
+    subgraph ClientCompression["Client-Side Compression"]
+        CompressNote[Compresses to <3MB<br/>~4MB after base64<br/>Works on ALL platforms]
+    end
+
     subgraph Local["Local Development"]
-        LocalLimit[100MB<br/>Custom Parser]
+        LocalLimit[100MB Limit<br/>✅ Works perfectly]
     end
 
     subgraph Vercel["Vercel"]
-        VercelHobby[Hobby: 4.5MB<br/>Hard Limit]
-        VercelPro[Pro: 4.5MB+<br/>Contact Support]
+        VercelHobby[4.5MB Limit<br/>✅ Compression keeps under limit]
     end
 
     subgraph SelfHosted["Self-Hosted"]
-        SelfLimit[100MB<br/>NODE_OPTIONS config]
+        SelfLimit[100MB Limit<br/>✅ Works perfectly]
     end
 
     subgraph Railway["Railway"]
-        RailwayLimit[100MB<br/>Default Support]
+        RailwayLimit[100MB Limit<br/>✅ Works perfectly]
     end
 
     subgraph Cloudflare["Cloudflare Pages"]
-        CloudflareLimit[100MB<br/>Default Support]
+        CloudflareLimit[100MB Limit<br/>✅ Works perfectly]
     end
 
     subgraph AWS["AWS Lambda"]
-        AWSLimit[6MB<br/>Hard Limit<br/>Use S3 presigned URLs]
+        AWSLimit[6MB Limit<br/>✅ Compression keeps under limit]
     end
 
+    ClientCompression --> Local
+    ClientCompression --> Vercel
+    ClientCompression --> SelfHosted
+    ClientCompression --> Railway
+    ClientCompression --> Cloudflare
+    ClientCompression --> AWS
+
+    style ClientCompression fill:#FFD700
     style Local fill:#90EE90
     style SelfHosted fill:#90EE90
     style Railway fill:#90EE90
     style Cloudflare fill:#90EE90
-    style Vercel fill:#FFD700
-    style AWS fill:#FF6B6B
+    style Vercel fill:#90EE90
+    style AWS fill:#90EE90
 ```
 
 ---
@@ -707,6 +764,7 @@ graph TB
     subgraph Frontend["Frontend (React/Next.js)"]
         UI[User Interface]
         Upload[File Upload Component]
+        ClientCompress["Client-Side Compression<br/>Auto-compress >3MB<br/>Max 4096px, 80% quality"]
         Preview[Image Preview]
         Controls[Processing Controls]
     end
@@ -737,7 +795,8 @@ graph TB
     end
 
     UI --> Upload
-    Upload --> UploadAPI
+    Upload --> ClientCompress
+    ClientCompress --> UploadAPI
     UploadAPI --> ImageProcessor
     ImageProcessor --> SharpOps
     SharpOps --> Buffer
@@ -775,6 +834,7 @@ graph TB
     style Processing fill:#E1FFE1
     style External fill:#FFE4E1
     style Storage fill:#F0F0F0
+    style ClientCompress fill:#FFD700
 ```
 
 ---
