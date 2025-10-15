@@ -597,7 +597,7 @@ export function ImageCompression({}: ImageCompressionProps) {
                       value={[maxFileSizeKB]}
                       onValueChange={(value) => setMaxFileSizeKB(value[0])}
                       min={50}
-                      max={5000}
+                      max={maxFileSizeKB}
                       step={50}
                       className="w-full"
                     />

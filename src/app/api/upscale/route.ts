@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { parseJsonBody, isPayloadTooLargeError } from '@/lib/requestHelper';
 import { APIResponse, ImageDimensions } from '@/types';
 
-// Configure route to handle large payloads
+// Configure route to handle large payloads and prevent timeout
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 60; // 60 seconds timeout
 export const dynamic = 'force-dynamic';
-// Increase body size limit to 50MB for large images
-export const bodyParser = {
-  sizeLimit: '50mb',
-};
+// Note: Body size limit configured in next.config.js (100MB)
 
 async function getSharp() {
   try {
@@ -124,7 +122,8 @@ async function upscaleImage(
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // Use custom JSON parser to support large payloads (up to 100MB)
+    const body = await parseJsonBody(req);
     const {
       imageData,
       targetDimensions,
@@ -164,6 +163,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error('Upscale error:', error);
+
+    // Handle payload size errors with helpful message
+    if (isPayloadTooLargeError(error)) {
+      const response: APIResponse = {
+        success: false,
+        error: 'Image file is too large. Please use an image smaller than 10MB or reduce the image quality before upload.',
+      };
+      return NextResponse.json(response, { status: 413 });
+    }
 
     const response: APIResponse = {
       success: false,

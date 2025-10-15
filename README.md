@@ -1778,6 +1778,19 @@ npx tsc --noEmit
    - Ensure browser supports modern JavaScript features
    - For SVG files, ensure they have valid width/height attributes or viewBox
 
+2a. **"Request Entity Too Large" Error**
+   - This error occurs when the image payload exceeds server limits
+   - The application supports up to 100MB payloads through custom parsing
+   - **Deployment Platform Limits**:
+     - **Vercel**: 4.5MB limit (upgrade to Pro for higher limits)
+     - **Self-hosted**: Configure `NODE_OPTIONS="--max-http-header-size=100000000"`
+     - **See DEPLOYMENT.md** for platform-specific configuration
+   - **Workarounds**:
+     - Reduce image file size before upload (recommended: 5-10MB max)
+     - Compress images client-side before processing
+     - Use smaller batch sizes
+   - **Note**: Base64 encoding increases size by ~33%
+
 3. **AI Processing Issues**
    - Large images may take longer to process
    - Check your internet connection

@@ -2,20 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ImageProcessor } from '@/lib/imageProcessor';
 import { FileHandler } from '@/lib/fileHandler';
 import { createCloudConvertService } from '@/lib/cloudConvert';
+import { parseJsonBody, isPayloadTooLargeError } from '@/lib/requestHelper';
 import { APIResponse, ImageDimensions, ImageProcessingOptions, ExtensionStrategy } from '@/types';
 
-// Configure route to handle large payloads
+// Configure route to handle large payloads and prevent timeout
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 60; // 60 seconds timeout
 export const dynamic = 'force-dynamic';
-// Increase body size limit to 50MB for large images
-export const bodyParser = {
-  sizeLimit: '50mb',
-};
+// Note: Body size limit configured in next.config.js (100MB)
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // Use custom JSON parser to support large payloads (up to 100MB)
+    const body = await parseJsonBody(req);
     const {
       imageData,
       targetDimensions,
@@ -101,10 +100,19 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Processing error:', error);
 
+    // Handle payload size errors with helpful message
+    if (isPayloadTooLargeError(error)) {
+      const response: APIResponse = {
+        success: false,
+        error: 'Image file is too large. Please use an image smaller than 10MB or reduce the image quality before upload.',
+      };
+      return NextResponse.json(response, { status: 413 });
+    }
+
     // Try fallback strategy if AI processing failed
     if (error instanceof Error && error.message.includes('AI')) {
       try {
-        const body = await req.json();
+        const body = await parseJsonBody(req);
         const { imageData, targetDimensions, quality = 80, format = 'jpeg' } = body;
 
         const imageBuffer = Buffer.from(imageData, 'base64');
