@@ -1121,7 +1121,7 @@ export function Upscaling({ onBack }: UpscalingProps) {
                         );
                         return (
                           <p className="text-sm text-gray-600 mt-2">
-                            Output: {outputWidth} × {outputHeight} • ~{Math.round(estimatedSize / 1024)} KB
+                            Output: {outputWidth} × {outputHeight}
                           </p>
                         );
                       })()}
