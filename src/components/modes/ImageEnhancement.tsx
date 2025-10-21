@@ -10,7 +10,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, RotateCcw, Wand2, Sparkles, Zap, Cpu, Info, X, Edit2 } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Info, X, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ONNXImageEnhancer } from '@/lib/onnxInference';
 import JSZip from 'jszip';
@@ -36,7 +36,7 @@ interface EnhancedImage {
   };
 }
 
-type EnhancementMethod = 'ai' | 'non-ai';
+type EnhancementMethod = 'non-ai';
 
 interface EnhancementSettings {
   method: EnhancementMethod;
@@ -54,7 +54,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
   const [comparisonPosition, setComparisonPosition] = useState<number>(50);
   const [isComparing, setIsComparing] = useState(false);
   const [imageBounds, setImageBounds] = useState<{ left: number; right: number } | null>(null);
-  const [enhancementMethod, setEnhancementMethod] = useState<EnhancementMethod>('ai');
+  const [enhancementMethod, setEnhancementMethod] = useState<EnhancementMethod>('non-ai');
   const [sharpness, setSharpness] = useState<number>(5);
   const [onnxEnhancer, setOnnxEnhancer] = useState<ONNXImageEnhancer | null>(null);
   const [onnxModelLoaded, setOnnxModelLoaded] = useState(false);
@@ -307,15 +307,12 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
 
     setIsProcessing(true);
 
-    const methodMessages = {
-      ai: 'Analyzing with AI...',
-      'non-ai': onnxModelLoaded ? 'Processing with ML model...' : 'Applying sharpening filters...'
-    };
+    const message = onnxModelLoaded ? 'Processing with ML model...' : 'Applying sharpening filters...';
 
     setProcessingStatus({
       stage: 'analyzing',
       progress: 10,
-      message: methodMessages[enhancementMethod]
+      message: message
     });
 
     try {
@@ -388,7 +385,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         body: JSON.stringify({
           imageData: uploadedImage.imageData,
           format: 'jpeg',
-          method: enhancementMethod === 'non-ai' ? 'sharp' : enhancementMethod,
+          method: 'sharp',
           sharpness: sharpness,
         }),
       });
@@ -562,14 +559,14 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
             transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
             className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center"
           >
-            <Wand2 className="w-5 h-5 text-indigo-600" />
+            <Sparkles className="w-5 h-5 text-indigo-600" />
           </motion.div>
           <h1 className="text-3xl font-bold text-gray-900">
             Image Enhancement
           </h1>
         </div>
         <p className="text-sm text-gray-600">
-          Unblur and sharpen images with AI-powered enhancement. Images under 100 KB are automatically upscaled to 190-200 KB.
+          Sharpen and enhance images with advanced processing. Images under 100 KB are automatically upscaled to 190-200 KB.
         </p>
       </motion.header>
 
@@ -614,30 +611,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                 const settings = (item.settings || {}) as unknown as EnhancementSettings;
                 return (
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Enhancement Method</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          variant={settings.method === 'ai' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => updateImageSettings(item.id, { method: 'ai' })}
-                          className="flex flex-col items-center gap-1 h-auto py-2"
-                        >
-                          <Wand2 className="w-4 h-4" />
-                          <span className="text-xs">AI (Best)</span>
-                        </Button>
-                        <Button
-                          variant={settings.method === 'non-ai' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => updateImageSettings(item.id, { method: 'non-ai' })}
-                          className="flex flex-col items-center gap-1 h-auto py-2"
-                        >
-                          <Cpu className="w-4 h-4" />
-                          <span className="text-xs">Non-AI</span>
-                        </Button>
-                      </div>
-                    </div>
-                    {settings.method === 'non-ai' && !onnxModelLoaded && (
+                    {!onnxModelLoaded && (
                       <div>
                         <label className="block text-sm font-medium mb-2">
                           Sharpness: {settings.sharpness}/10
@@ -667,10 +641,10 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                     <CardContent className="space-y-3">
                       <div className="bg-white p-3 rounded-lg border border-blue-200">
                         <p className="text-sm text-gray-700 mb-2">
-                          <strong className="text-blue-700">Batch Mode:</strong> All images use <strong>Non-AI enhancement</strong> by default for faster processing and consistent results.
+                          <strong className="text-blue-700">Batch Mode:</strong> All images use <strong>Sharp.js enhancement</strong> for fast processing and consistent results.
                         </p>
                         <p className="text-xs text-gray-600">
-                          💡 Click on each image below to customize individual settings before processing.
+                          💡 Click on each image below to customize sharpness settings before processing.
                         </p>
                       </div>
 
@@ -774,44 +748,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-700">Enhancement Method</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setEnhancementMethod('ai')}
-                          className={`
-                            p-2 rounded-lg border-2 transition-all flex flex-col items-center gap-1
-                            ${enhancementMethod === 'ai'
-                              ? 'border-indigo-500 bg-indigo-50 text-indigo-900'
-                              : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                            }
-                          `}
-                        >
-                          <Wand2 className="w-5 h-5" />
-                          <span className="text-xs font-medium">AI (Best)</span>
-                          <span className="text-xs text-gray-500">Cloud-based</span>
-                        </button>
-
-                        <button
-                          onClick={() => setEnhancementMethod('non-ai')}
-                          className={`
-                            p-2 rounded-lg border-2 transition-all flex flex-col items-center gap-1
-                            ${enhancementMethod === 'non-ai'
-                              ? 'border-purple-500 bg-purple-50 text-purple-900'
-                              : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                            }
-                          `}
-                        >
-                          <Cpu className="w-5 h-5" />
-                          <span className="text-xs font-medium">Non-AI</span>
-                          <span className="text-xs text-gray-500">
-                            {onnxModelLoaded ? 'NAFNet ML' : 'Fast sharpening'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {enhancementMethod === 'non-ai' && !onnxModelLoaded && (
+                    {!onnxModelLoaded && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -836,18 +773,10 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                       </motion.div>
                     )}
 
-                    <div className={`
-                      rounded-lg p-2 border
-                      ${enhancementMethod === 'ai' ? 'bg-indigo-50 border-indigo-200' : ''}
-                      ${enhancementMethod === 'non-ai' ? 'bg-purple-50 border-purple-200' : ''}
-                    `}>
-                      {enhancementMethod === 'ai' && (
-                        <h3 className="font-semibold text-indigo-900 text-xs">AI Enhancement using Gemini</h3>
-                      )}
-
-                      {enhancementMethod === 'non-ai' && (
-                        <h3 className="font-semibold text-purple-900 text-xs">Non-AI Enhancement</h3>
-                      )}
+                    <div className="rounded-lg p-2 border bg-purple-50 border-purple-200">
+                      <h3 className="font-semibold text-purple-900 text-xs">
+                        {onnxModelLoaded ? 'NAFNet ML Enhancement' : 'Sharp.js Enhancement'}
+                      </h3>
                     </div>
                   </CardContent>
                 </Card>
@@ -1085,7 +1014,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                           <span>{Math.round(enhancedImage.metadata.size / 1024)} KB</span>
                         </div>
                         <div className="mt-2 p-2 bg-green-50 rounded text-xs text-green-700 border border-green-200">
-                          ✓ Enhanced with {enhancementMethod === 'ai' ? 'AI-powered' : 'ML-powered'} clarity
+                          ✓ Enhanced with {onnxModelLoaded ? 'ML-powered' : 'Sharp.js'} clarity
                           {enhancedImage.metadata.wasUpscaled && (
                             <span className="block mt-1">⚡ Automatically upscaled for better quality</span>
                           )}
@@ -1131,7 +1060,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         transition={{ duration: 0.5, delay: 0.6 }}
         className="text-center mt-4 text-gray-500 text-xs"
       >
-        <p>AI Enhancement (Gemini Cloud) • Non-AI (NAFNet ML / Sharp.js) • Supports JPEG, PNG, WebP and SVG</p>
+        <p>NAFNet ML / Sharp.js Enhancement • Supports JPEG, PNG, WebP and SVG</p>
       </motion.footer>
 
       {/* Format Download Dialog */}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { GoogleGenAI } from '@google/genai';
 import * as fs from 'node:fs';
 import * as path from 'path';
@@ -36,7 +37,7 @@ export class ImageProcessor {
   async processImage(
     imageBuffer: Buffer,
     originalDimensions: ImageDimensions,
-    targetDimensions: ImageDimensions,
+    targetAspectRatio: ImageDimensions, // Renamed for clarity in the logic
     options: ImageProcessingOptions,
     strategy: ExtensionStrategy = { type: 'ai' }
   ): Promise<ProcessedImage> {
@@ -44,95 +45,98 @@ export class ImageProcessor {
       const sharp = await this.getSharp();
       const isSVGInput = await this.isSVG(imageBuffer);
 
-      // If input is SVG and output format is SVG, preserve vector format
+      // --- 1. Handle SVG-to-SVG natively (vector preservation) ---
       if (isSVGInput && options.format === 'svg') {
         console.log('Processing SVG natively to preserve vector format...');
+        // Note: For native SVG, expansion/cropping logic would need SVG-specific ViewBox manipulation.
+        // For simplicity, we'll keep the current SVG-to-SVG logic.
         return await this.processSVGNatively(
           imageBuffer,
           originalDimensions,
-          targetDimensions,
+          originalDimensions, // Pass original dimensions to avoid complex SVG aspect ratio logic
           options,
           strategy
         );
       }
 
-      // For SVG files with non-SVG output, convert to raster first for consistent processing
       let workingBuffer: Buffer = imageBuffer;
+      // --- 2. Convert SVG to Raster if output is not SVG or for AI/Sharp processing ---
       if (isSVGInput) {
         console.log('Converting SVG to raster format for processing...');
-        const svgConverted = await sharp(imageBuffer, {
-          density: 300,
-          limitInputPixels: 1000000000
-        })
-        .png()
-        .toBuffer();
-        workingBuffer = Buffer.from(svgConverted);
+        workingBuffer = await sharp(imageBuffer, { density: 300, limitInputPixels: 1000000000 })
+          .png()
+          .toBuffer();
       }
 
-      let processedBuffer: Buffer;
+      // --- 3. Determine Expansion Target Dimensions ---
+      // For expansion, we need a target size significantly larger than the original image
+      // to give the AI (or edge-color fill) enough room, while maintaining the *original* aspect ratio.
+      // E.g., expand width/height by 50%
+      const expansionTarget: ImageDimensions = {
+          width: Math.round(originalDimensions.width * 1.5),
+          height: Math.round(originalDimensions.height * 1.5)
+      };
+
+      let expandedBuffer: Buffer;
 
       if (strategy.type === 'ai' && this.apiKey) {
         try {
-          // Use AI generative fill (with 3 retries built-in)
-          processedBuffer = await this.processWithNanoBanana(
+          // Use AI generative fill to expand to the larger canvas
+          expandedBuffer = await this.processWithNanoBanana(
             workingBuffer,
-            targetDimensions
+            expansionTarget
           );
 
           // Validate that AI returned a result
-          const isImageDifferent = await this.areImagesDifferent(workingBuffer, processedBuffer);
+          const isImageDifferent = await this.areImagesDifferent(workingBuffer, expandedBuffer);
 
           if (!isImageDifferent) {
             // If AI didn't change the image, use edge detection fallback
             console.warn('AI processing returned unchanged image after 3 attempts, using edge color extension fallback');
-            processedBuffer = await this.extendWithEdgeColorDetection(
+            expandedBuffer = await this.extendWithEdgeColorDetection(
               workingBuffer,
               originalDimensions,
-              targetDimensions
+              expansionTarget // Expand to the large target size
             );
           }
-          // Note: Removed cropping fallback - AI should handle dimensions correctly
-          // If dimensions don't match, the AI needs to be retried or improved
         } catch (error) {
           console.warn('AI generative fill failed after 3 attempts, using edge color extension fallback:', error);
-          processedBuffer = await this.extendWithEdgeColorDetection(
+          expandedBuffer = await this.extendWithEdgeColorDetection(
             workingBuffer,
             originalDimensions,
-            targetDimensions
+            expansionTarget // Expand to the large target size
           );
         }
       } else {
-        // Fallback: extend background using edge color detection when no API key
-        processedBuffer = await this.extendWithEdgeColorDetection(
+        // Fallback: extend background using edge color detection
+        expandedBuffer = await this.extendWithEdgeColorDetection(
           workingBuffer,
           originalDimensions,
-          targetDimensions
+          expansionTarget // Expand to the large target size
         );
       }
 
-      // Optimize for web
+      // --- 4. Crop the Expanded Image to the Target Aspect Ratio ---
+      const processedBuffer = await this.cropToAspectRatio(
+          expandedBuffer,
+          targetAspectRatio, // Use the UI's selected aspect ratio (e.g., 16:9)
+          options.format === 'svg' ? 'jpeg' : options.format,
+          options.quality
+      );
+
+      // --- 5. Optimize for web and return result ---
       const optimizedBuffer = await this.optimizeForWeb(processedBuffer, options);
 
-      // For SVG output, we don't need sharp metadata as it's already in SVG format
-      if (options.format === 'svg') {
-        return {
-          buffer: optimizedBuffer,
-          metadata: {
-            width: targetDimensions.width,
-            height: targetDimensions.height,
-            format: 'svg',
-            size: optimizedBuffer.length,
-          },
-        };
-      }
-
       const metadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+      // Final dimensions are the crop dimensions, not the initial expansion target
+      const finalDimensions = await sharp(processedBuffer).metadata();
 
       return {
         buffer: optimizedBuffer,
         metadata: {
-          width: metadata.width || targetDimensions.width,
-          height: metadata.height || targetDimensions.height,
+          width: finalDimensions.width || 0, // Use the cropped width
+          height: finalDimensions.height || 0, // Use the cropped height
           format: metadata.format || options.format,
           size: optimizedBuffer.length,
         },
@@ -194,47 +198,36 @@ export class ImageProcessor {
       const originalWidth = metadata.width || 0;
       const originalHeight = metadata.height || 0;
 
-      console.log(`=== AI GENERATIVE FILL STARTING ===`);
-      console.log(`Original image: ${originalWidth} × ${originalHeight} pixels`);
-      console.log(`Target output: ${targetDimensions.width} × ${targetDimensions.height} pixels`);
-      console.log(`Expansion needed: +${targetDimensions.width - originalWidth}px width, +${targetDimensions.height - originalHeight}px height`);
-      console.log(`CRITICAL: Must EXPAND by adding pixels, NEVER crop`);
+      // console.log(`=== AI GENERATIVE FILL STARTING ===`);
+      // console.log(`Original image: ${originalWidth} × ${originalHeight} pixels`);
+      // console.log(`Target output: ${targetDimensions.width} × ${targetDimensions.height} pixels`);
+      // console.log(`Expansion needed: +${targetDimensions.width - originalWidth}px width, +${targetDimensions.height - originalHeight}px height`);
+      // console.log(`CRITICAL: Must EXPAND by adding pixels, NEVER crop`);
 
       // Create prompt for nano banana model - Generative Expand
       const prompt = [
         {
-          text: `ABSOLUTE REQUIREMENT - EXPANSION ONLY, NEVER CROP:
+          text: `The original image is ${originalWidth} × ${originalHeight} pixels.
+                The target output MUST be 4160 × 4160 pixels.
 
-The original image is ${originalWidth} × ${originalHeight} pixels.
-The target output MUST be ${targetDimensions.width} × ${targetDimensions.height} pixels.
+                ZOOM OUT THE IMAGE to MAKE THE SUBJECT SMALLER and SHOW MORE OF THE BACKGROUND.
 
-CRITICAL: You MUST expand the canvas by ADDING pixels, NEVER by removing/cropping pixels.
+                Keep the subject in the MIDDLE OF THE FRAME and ADD NEW BACKGROUND AROUND IT to reach the target size.
 
-STRICT RULES:
-1. NEVER CROP - The entire ${originalWidth} × ${originalHeight} original image must be 100% visible in the output
-2. NEVER RESIZE/SCALE - Keep the original image at its native resolution
-3. NEVER STRETCH/DISTORT - Maintain the original aspect ratio and quality
-4. ALWAYS EXPAND - Only add new AI-generated content around the edges
+                THE EXPANDED BACKGROUND MUST BE GENERATED USING AI to seamlessly continue the existing scene.
 
-EXPANSION PROCESS:
-- Original image size: ${originalWidth} × ${originalHeight} pixels (MUST be preserved completely)
-- Target canvas size: ${targetDimensions.width} × ${targetDimensions.height} pixels
-- You need to ADD: ${targetDimensions.width - originalWidth} pixels width and ${targetDimensions.height - originalHeight} pixels height
-- Method: Place the original ${originalWidth}×${originalHeight} image in the center and use AI generative fill to create new background content in the surrounding empty space
+                STRICT RULES:
+                1. NEVER CROP - The original image must be intact and 100% visible in the output
+                2. NEVER RESIZE/SCALE - Keep the original image at its native resolution
+                3. NEVER STRETCH/DISTORT - Maintain the original quality and DO NOT STRETCH OR CROP any part of the image
+                4. ALWAYS EXPAND - Only ADD NEW CONTENT USING GENERATIVE AI around the original image to reach target size
 
-QUALITY REQUIREMENTS for the NEW generated areas only:
-1. Analyze the original image edges: colors, patterns, textures, lighting, shadows
-2. Generate seamless background content that continues the existing scene
-3. Perfect edge blending - no visible seams between original and generated areas
-4. Match the exact style, grain, and quality of the original photograph
-5. Maintain consistent perspective and lighting
-
-OUTPUT VERIFICATION:
-- Final dimensions: EXACTLY ${targetDimensions.width} × ${targetDimensions.height} pixels
-- Original content: 100% preserved at ${originalWidth} × ${originalHeight} pixels
-- Generated content: Only in the newly added border areas
-
-Remember: EXPAND the canvas by ADDING content. NEVER crop or remove any part of the original ${originalWidth}×${originalHeight} image.`
+                QUALITY REQUIREMENTS for the NEW generated areas only:
+                1. Analyze the original image background: colors, patterns, textures, lighting, shadows
+                2. Generate seamless background content that continues the existing scene
+                3. Perfect edge blending - no visible seams between original and generated areas
+                4. Match the exact style, grain, and quality of the original photograph
+                5. Maintain consistent perspective and lighting`
         },
         {
           inlineData: {
@@ -251,7 +244,7 @@ Remember: EXPAND the canvas by ADDING content. NEVER crop or remove any part of 
 
           // Call nano banana model
           const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
+            model: 'gemini-2.5-flash-image',
             contents: prompt,
           });
 
@@ -280,14 +273,14 @@ Remember: EXPAND the canvas by ADDING content. NEVER crop or remove any part of 
               console.log(`Original dimensions: ${originalWidth} × ${originalHeight}`);
 
               // Check if AI properly expanded (not cropped)
-              if (resultWidth < originalWidth || resultHeight < originalHeight) {
-                throw new Error(`AI CROPPED the image! Output ${resultWidth}×${resultHeight} is smaller than original ${originalWidth}×${originalHeight}. Retrying...`);
-              }
+              // if (resultWidth < originalWidth || resultHeight < originalHeight) {
+              //   throw new Error(`AI CROPPED the image! Output ${resultWidth}×${resultHeight} is smaller than original ${originalWidth}×${originalHeight}. Retrying...`);
+              // }
 
               // Warn if dimensions don't match target (but don't fail if it expanded)
-              if (resultWidth !== targetDimensions.width || resultHeight !== targetDimensions.height) {
-                console.warn(`AI dimensions ${resultWidth}×${resultHeight} don't exactly match target ${targetDimensions.width}×${targetDimensions.height}, but image was expanded (not cropped)`);
-              }
+              // if (resultWidth !== targetDimensions.width || resultHeight !== targetDimensions.height) {
+              //   console.warn(`AI dimensions ${resultWidth}×${resultHeight} don't exactly match target ${targetDimensions.width}×${targetDimensions.height}, but image was expanded (not cropped)`);
+              // }
 
               // Clean up temp input file
               if (fs.existsSync(tempInputPath)) {
@@ -641,6 +634,73 @@ Remember: EXPAND the canvas by ADDING content. NEVER crop or remove any part of 
     }
   }
 
+  private async cropToAspectRatio(
+    imageBuffer: ProcessedImage['buffer'],
+    targetAspectRatio: ImageDimensions,
+    format: 'jpeg' | 'png' | 'webp' = 'jpeg',
+    quality: number = 90
+  ): Promise<Buffer> { // Change return type to Buffer for internal use
+    const sharp = await this.getSharp();
+
+    // Defensive SVG handling: convert to raster if SVG is passed
+    let workingBuffer = imageBuffer;
+    const isSVGInput = await this.isSVG(imageBuffer);
+    if (isSVGInput) {
+      console.log('Converting SVG to raster in cropToAspectRatio...');
+      workingBuffer = await sharp(imageBuffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+    }
+
+    const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+    const originalWidth = metadata.width || 0;
+    const originalHeight = metadata.height || 0;
+
+    if (originalWidth === 0 || originalHeight === 0) {
+      throw new Error('Could not determine image dimensions for aspect ratio cropping.');
+    }
+
+    const targetRatio = targetAspectRatio.width / targetAspectRatio.height;
+    const originalRatio = originalWidth / originalHeight;
+
+    let cropWidth: number;
+    let cropHeight: number;
+
+    // Determine the largest area that matches the target aspect ratio
+    if (originalRatio > targetRatio) {
+      // Original is wider than target ratio (e.g., 4:3 image to 1:1 ratio)
+      // Crop height is constrained by original height, width is calculated.
+      cropHeight = originalHeight;
+      cropWidth = Math.round(originalHeight * targetRatio);
+    } else {
+      // Original is taller or equal to target ratio (e.g., 9:16 image to 16:9 ratio)
+      // Crop width is constrained by original width, height is calculated.
+      cropWidth = originalWidth;
+      cropHeight = Math.round(originalWidth / targetRatio);
+    }
+
+    // Calculate centering offset
+    const left = Math.max(0, Math.floor((originalWidth - cropWidth) / 2));
+    const top = Math.max(0, Math.floor((originalHeight - cropHeight) / 2));
+
+    console.log(`Cropping to aspect ratio ${targetAspectRatio.width}:${targetAspectRatio.height}. Crop area: ${cropWidth}x${cropHeight} at L:${left}, T:${top}`);
+
+    // Perform the center-crop
+    const croppedBuffer = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 })
+      .extract({
+        left: left,
+        top: top,
+        width: cropWidth,
+        height: cropHeight
+      })
+      .toBuffer(); // Do not format yet, let optimizeForWeb handle final format
+
+    return croppedBuffer;
+  }
+
   private async optimizeForWeb(
     imageBuffer: Buffer,
     options: ImageProcessingOptions
@@ -941,145 +1001,6 @@ Remember: EXPAND the canvas by ADDING content. NEVER crop or remove any part of 
     } catch (error) {
       console.warn('SVG optimization failed, returning unoptimized SVG:', error);
       return svgString;
-    }
-  }
-
-  /**
-   * Enhance image with AI-powered deblurring and sharpening
-   */
-  async enhanceImage(
-    imageBuffer: Buffer,
-    format: 'jpeg' | 'png' | 'webp' = 'jpeg'
-  ): Promise<ProcessedImage> {
-    if (!this.apiKey) {
-      throw new Error('Google AI API key not configured');
-    }
-
-    try {
-      const sharp = await this.getSharp();
-
-      // Defensive SVG handling: convert to raster if SVG is passed
-      let workingBuffer = imageBuffer;
-      const isSVGInput = await this.isSVG(imageBuffer);
-      if (isSVGInput) {
-        console.log('Converting SVG to raster for enhancement...');
-        workingBuffer = await sharp(imageBuffer, {
-          density: 300,
-          limitInputPixels: 1000000000
-        })
-        .png()
-        .toBuffer();
-      }
-
-      // Create temporary file for input image
-      const tempDir = os.tmpdir();
-      const tempInputPath = path.join(tempDir, `enhance_input_${Date.now()}.jpg`);
-
-      try {
-        // Save input image to temp file
-        fs.writeFileSync(tempInputPath, workingBuffer);
-
-        // Initialize Google GenAI
-        const ai = new GoogleGenAI({ apiKey: this.apiKey });
-
-        // Read and encode image
-        const imageData = fs.readFileSync(tempInputPath);
-        const base64Image = imageData.toString('base64');
-
-        // Detect image format
-        const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
-        const imageFormat = metadata.format || 'jpeg';
-
-        // Create prompt for enhancement
-        const prompt = [
-          {
-            text: `Enhance and sharpen this image with maximum clarity while preserving all fine details. Requirements:
-
-Deblur the image using advanced deconvolution techniques to reverse motion blur, defocus blur, and gaussian blur
-Sharpen all edges and lines to make them crisp and distinct - every line, edge, and boundary should be clearly defined
-Preserve fine details and textures - no smoothing or softening effects
-Enhance micro-details like text, patterns, and intricate elements
-Increase definition of all structural elements, contours, and boundaries
-Apply edge enhancement to make all lines stand out prominently
-Remove noise without blurring - use noise reduction that maintains sharpness
-Restore high-frequency details that may have been lost in the original image
-NO smoothing, NO soft filters, NO beauty effects - maintain natural texture and grain
-Enhance contrast locally to improve detail visibility
-Recover lost information from blurred or degraded areas using AI reconstruction
-Output should be crisp and sharp with every line, edge, and detail clearly visible and well-defined
-
-Focus on: clarity, sharpness, detail preservation, edge definition, and structural enhancement. The result should look like a high-quality, perfectly focused photograph with razor-sharp lines and details.`
-          },
-          {
-            inlineData: {
-              mimeType: `image/${imageFormat}`,
-              data: base64Image,
-            },
-          },
-        ];
-
-        // Call Gemini model
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image-preview',
-          contents: prompt,
-        });
-
-        // Process response
-        if (!response.candidates || response.candidates.length === 0) {
-          throw new Error('No candidates returned from Gemini model');
-        }
-
-        const candidate = response.candidates[0];
-        if (!candidate.content || !candidate.content.parts) {
-          throw new Error('No content parts returned from Gemini model');
-        }
-
-        for (const part of candidate.content.parts) {
-          if (part.inlineData && part.inlineData.data) {
-            const enhancedImageData = part.inlineData.data;
-            const enhancedBuffer = Buffer.from(enhancedImageData, 'base64');
-
-            // Clean up temp input file
-            if (fs.existsSync(tempInputPath)) {
-              fs.unlinkSync(tempInputPath);
-            }
-
-            // Optimize the enhanced image
-            const optimizedBuffer = await this.optimizeForWeb(enhancedBuffer, {
-              quality: 90,
-              format: format,
-              targetDimensions: { width: metadata.width || 0, height: metadata.height || 0 }
-            });
-
-            const finalMetadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
-
-            return {
-              buffer: optimizedBuffer,
-              metadata: {
-                width: finalMetadata.width || metadata.width || 0,
-                height: finalMetadata.height || metadata.height || 0,
-                format: finalMetadata.format || format,
-                size: optimizedBuffer.length,
-              },
-            };
-          }
-        }
-
-        throw new Error('No image data returned from Gemini model');
-      } catch (error) {
-        // Clean up temp files
-        try {
-          if (fs.existsSync(tempInputPath)) {
-            fs.unlinkSync(tempInputPath);
-          }
-        } catch (cleanupError) {
-          console.warn('Failed to clean up temp files:', cleanupError);
-        }
-        throw error;
-      }
-    } catch (error) {
-      console.error('Image enhancement error:', error);
-      throw new Error(`Image enhancement failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
