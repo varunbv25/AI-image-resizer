@@ -81,6 +81,7 @@ export function AIImageResizing({ onEditAgain, preUploadedFiles }: AIImageResizi
     setTargetDimensions={setTargetDimensions}
     setBatchFiles={handleBatchModeActivation}
     preUploadedFile={preUploadedFiles && preUploadedFiles.length === 1 ? preUploadedFiles[0] : undefined}
+    onEditAgain={onEditAgain}
   />;
 }
 
@@ -833,13 +834,15 @@ interface AIImageResizingContentProps {
   setTargetDimensions: (dims: ImageDimensions) => void;
   setBatchFiles: (files: File[]) => void;
   preUploadedFile?: File;
+  onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
 }
 
 function AIImageResizingContent({
   targetDimensions,
   setTargetDimensions,
   setBatchFiles,
-  preUploadedFile
+  preUploadedFile,
+  onEditAgain
 }: AIImageResizingContentProps) {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 

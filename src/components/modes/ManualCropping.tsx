@@ -89,6 +89,7 @@ export function ManualCropping({ onEditAgain, preUploadedFiles }: ManualCropping
   return <ManualCroppingContent
     setBatchFiles={handleBatchModeActivation}
     preUploadedFile={preUploadedFiles && preUploadedFiles.length === 1 ? preUploadedFiles[0] : undefined}
+    onEditAgain={onEditAgain}
   />;
 }
 
@@ -649,9 +650,10 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
 interface ManualCroppingContentProps {
   setBatchFiles: (files: File[]) => void;
   preUploadedFile?: File;
+  onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
 }
 
-function ManualCroppingContent({ setBatchFiles, preUploadedFile }: ManualCroppingContentProps) {
+function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: ManualCroppingContentProps) {
   const [targetDimensions, setTargetDimensions] = useState<ImageDimensions>({
     width: 1080,
     height: 1920,
