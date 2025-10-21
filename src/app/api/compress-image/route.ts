@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseJsonBody, isPayloadTooLargeError } from '@/lib/requestHelper';
 import { APIResponse } from '@/types';
+import { ImageProcessor } from '@/lib/imageProcessor';
 
 // Configure route to handle large payloads and prevent timeout
 export const runtime = 'nodejs';
@@ -143,13 +144,30 @@ export async function POST(req: NextRequest) {
       compressedBuffer = await compressImage(buffer, format, currentQuality);
     }
 
+    // Auto-upscale if < 100KB
+    const processor = new ImageProcessor();
+    const finalMetadata = await sharp(compressedBuffer, { limitInputPixels: 1000000000 }).metadata();
+
+    const upscaledResult = await processor.autoUpscaleIfNeeded({
+      buffer: compressedBuffer,
+      metadata: {
+        width: finalMetadata.width || 0,
+        height: finalMetadata.height || 0,
+        format: finalMetadata.format || format,
+        size: compressedBuffer.length,
+      },
+    });
+
+    const finalBuffer = upscaledResult.buffer;
+    const wasUpscaled = upscaledResult.wasUpscaled || false;
+
     // Calculate compression ratio
     const compressionRatio = Math.round(
-      ((originalSize - compressedBuffer.length) / originalSize) * 100
+      ((originalSize - finalBuffer.length) / originalSize) * 100
     );
 
     // Convert buffer to base64
-    const base64Image = compressedBuffer.toString('base64');
+    const base64Image = finalBuffer.toString('base64');
     const mimeType = `image/${format === 'jpg' ? 'jpeg' : format}`;
     const compressedImageData = `data:${mimeType};base64,${base64Image}`;
 
@@ -157,10 +175,11 @@ export async function POST(req: NextRequest) {
       success: true,
       data: {
         imageData: compressedImageData,
-        size: compressedBuffer.length,
+        size: finalBuffer.length,
         compressionRatio: compressionRatio,
         quality: currentQuality,
         format: format,
+        wasUpscaled,
       },
     };
 

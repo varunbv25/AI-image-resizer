@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, Clock, Download, FileArchive } from 'lucide-react';
@@ -29,11 +30,17 @@ interface BatchProcessorProps {
   onDownloadAll: () => void;
   onDownloadSingle: (id: string) => void;
   onProcessSingle?: (id: string) => void;
+  onProcessAll?: () => void;
+  onReset?: () => void;
   totalProcessed: number;
-  totalItems: number;
+  totalItems?: number;
   processingStarted?: boolean;
+  batchProcessingStarted?: boolean;
   selectedId?: string | null;
+  selectedImageId?: string | null;
   onSelectImage?: (id: string) => void;
+  renderSettings?: (item: BatchItem) => React.ReactNode;
+  defaultSettingsPanel?: React.ReactNode;
 }
 
 export function BatchProcessor({
@@ -41,50 +48,84 @@ export function BatchProcessor({
   onDownloadAll,
   onDownloadSingle,
   onProcessSingle,
+  onProcessAll,
+  onReset,
   totalProcessed,
   totalItems,
   processingStarted = false,
+  batchProcessingStarted = false,
   selectedId = null,
+  selectedImageId = null,
   onSelectImage,
+  renderSettings,
+  defaultSettingsPanel,
 }: BatchProcessorProps) {
   const completedItems = items.filter(item => item.status === 'completed');
   const hasCompleted = completedItems.length > 0;
+  const actualTotalItems = totalItems || items.length;
+  const actualProcessingStarted = processingStarted || batchProcessingStarted;
+  const actualSelectedId = selectedId || selectedImageId;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <FileArchive className="w-5 h-5" />
-            Batch Processing ({totalProcessed}/{totalItems})
-          </CardTitle>
-          {hasCompleted && (
-            <Button
-              onClick={onDownloadAll}
-              className="bg-green-600 hover:bg-green-700"
-              size="sm"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download All ({completedItems.length})
-            </Button>
-          )}
-        </div>
-      </CardHeader>
+    <div className="space-y-4">
+      {/* Default Settings Panel */}
+      {defaultSettingsPanel}
+
+      {/* Main Batch Processor Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <FileArchive className="w-5 h-5" />
+              Batch Processing ({totalProcessed}/{actualTotalItems})
+            </CardTitle>
+            <div className="flex gap-2">
+              {onProcessAll && !actualProcessingStarted && (
+                <Button
+                  onClick={onProcessAll}
+                  className="bg-purple-600 hover:bg-purple-700"
+                  size="sm"
+                >
+                  Process All
+                </Button>
+              )}
+              {hasCompleted && (
+                <Button
+                  onClick={onDownloadAll}
+                  className="bg-green-600 hover:bg-green-700"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download All ({completedItems.length})
+                </Button>
+              )}
+              {onReset && (
+                <Button
+                  onClick={onReset}
+                  variant="outline"
+                  size="sm"
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
       <CardContent>
         <div className="space-y-3 max-h-[500px] overflow-y-auto">
           {items.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => onSelectImage?.(item.id)}
-              className={`
-                flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer
-                ${item.status === 'completed' ? 'border-green-200 bg-green-50' : ''}
-                ${item.status === 'processing' ? 'border-blue-200 bg-blue-50' : ''}
-                ${item.status === 'error' ? 'border-red-200 bg-red-50' : ''}
-                ${item.status === 'pending' ? 'border-gray-200 bg-gray-50 hover:border-gray-300' : ''}
-                ${selectedId === item.id ? 'ring-2 ring-purple-500 ring-offset-2' : ''}
-              `}
-            >
+            <div key={item.id} className="space-y-2">
+              <div
+                onClick={() => onSelectImage?.(item.id)}
+                className={`
+                  flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer
+                  ${item.status === 'completed' ? 'border-green-200 bg-green-50' : ''}
+                  ${item.status === 'processing' ? 'border-blue-200 bg-blue-50' : ''}
+                  ${item.status === 'error' ? 'border-red-200 bg-red-50' : ''}
+                  ${item.status === 'pending' ? 'border-gray-200 bg-gray-50 hover:border-gray-300' : ''}
+                  ${actualSelectedId === item.id ? 'ring-2 ring-purple-500 ring-offset-2' : ''}
+                `}
+              >
               {/* Image Preview */}
               {item.previewUrl && (
                 <div className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden bg-gray-200">
@@ -135,7 +176,7 @@ export function BatchProcessor({
 
               {/* Action Buttons */}
               <div className="flex-shrink-0 flex gap-2">
-                {item.status === 'pending' && onProcessSingle && !processingStarted && (
+                {item.status === 'pending' && onProcessSingle && !actualProcessingStarted && (
                   <Button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -161,10 +202,19 @@ export function BatchProcessor({
                   </Button>
                 )}
               </div>
+              </div>
+
+              {/* Settings Panel */}
+              {renderSettings && actualSelectedId === item.id && (
+                <div className="p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
+                  {renderSettings(item)}
+                </div>
+              )}
             </div>
           ))}
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }

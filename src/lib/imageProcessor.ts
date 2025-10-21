@@ -73,38 +73,28 @@ export class ImageProcessor {
 
       if (strategy.type === 'ai' && this.apiKey) {
         try {
+          // Use AI generative fill (with 3 retries built-in)
           processedBuffer = await this.processWithNanoBanana(
             workingBuffer,
             targetDimensions
           );
 
-          // Check if AI processed image is different from original
+          // Validate that AI returned a result
           const isImageDifferent = await this.areImagesDifferent(workingBuffer, processedBuffer);
 
           if (!isImageDifferent) {
             // If AI didn't change the image, use edge detection fallback
-            console.warn('AI processing returned unchanged image, using edge color extension fallback');
+            console.warn('AI processing returned unchanged image after 3 attempts, using edge color extension fallback');
             processedBuffer = await this.extendWithEdgeColorDetection(
               workingBuffer,
               originalDimensions,
               targetDimensions
             );
-          } else {
-            // Check if AI processed image meets target dimensions, crop if needed
-            const resultMetadata = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).metadata();
-            const resultWidth = resultMetadata.width || 0;
-            const resultHeight = resultMetadata.height || 0;
-
-            if (resultWidth !== targetDimensions.width || resultHeight !== targetDimensions.height) {
-              // Crop AI processed image to exact target dimensions
-              processedBuffer = await this.cropToExactDimensions(
-                processedBuffer,
-                targetDimensions
-              );
-            }
           }
+          // Note: Removed cropping fallback - AI should handle dimensions correctly
+          // If dimensions don't match, the AI needs to be retried or improved
         } catch (error) {
-          console.warn('AI processing failed, using edge color extension fallback:', error);
+          console.warn('AI generative fill failed after 3 attempts, using edge color extension fallback:', error);
           processedBuffer = await this.extendWithEdgeColorDetection(
             workingBuffer,
             originalDimensions,
@@ -112,7 +102,7 @@ export class ImageProcessor {
           );
         }
       } else {
-        // Fallback: extend background using edge color detection
+        // Fallback: extend background using edge color detection when no API key
         processedBuffer = await this.extendWithEdgeColorDetection(
           workingBuffer,
           originalDimensions,
@@ -181,6 +171,10 @@ export class ImageProcessor {
     const tempInputPath = path.join(tempDir, `input_${Date.now()}.jpg`);
     const tempOutputPath = path.join(tempDir, `output_${Date.now()}.jpg`);
 
+    // Retry logic: Try AI generation up to 3 times before giving up
+    const MAX_RETRIES = 3;
+    let lastError: Error | null = null;
+
     try {
       // Save input image to temp file
       fs.writeFileSync(tempInputPath, workingBuffer);
@@ -196,10 +190,51 @@ export class ImageProcessor {
       const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
       const imageFormat = metadata.format || 'jpeg';
 
-      // Create prompt for nano banana model
+      // Get original image dimensions
+      const originalWidth = metadata.width || 0;
+      const originalHeight = metadata.height || 0;
+
+      console.log(`=== AI GENERATIVE FILL STARTING ===`);
+      console.log(`Original image: ${originalWidth} × ${originalHeight} pixels`);
+      console.log(`Target output: ${targetDimensions.width} × ${targetDimensions.height} pixels`);
+      console.log(`Expansion needed: +${targetDimensions.width - originalWidth}px width, +${targetDimensions.height - originalHeight}px height`);
+      console.log(`CRITICAL: Must EXPAND by adding pixels, NEVER crop`);
+
+      // Create prompt for nano banana model - Generative Expand
       const prompt = [
         {
-          text: `Extend this image to ${targetDimensions.width}x${targetDimensions.height} pixels so that the background continues seamlessly. Ensure the new areas match the original style, colors, lighting, and textures, without any visible separation or border between the original image and the extended background and do not crop the image to these dimensions.`
+          text: `ABSOLUTE REQUIREMENT - EXPANSION ONLY, NEVER CROP:
+
+The original image is ${originalWidth} × ${originalHeight} pixels.
+The target output MUST be ${targetDimensions.width} × ${targetDimensions.height} pixels.
+
+CRITICAL: You MUST expand the canvas by ADDING pixels, NEVER by removing/cropping pixels.
+
+STRICT RULES:
+1. NEVER CROP - The entire ${originalWidth} × ${originalHeight} original image must be 100% visible in the output
+2. NEVER RESIZE/SCALE - Keep the original image at its native resolution
+3. NEVER STRETCH/DISTORT - Maintain the original aspect ratio and quality
+4. ALWAYS EXPAND - Only add new AI-generated content around the edges
+
+EXPANSION PROCESS:
+- Original image size: ${originalWidth} × ${originalHeight} pixels (MUST be preserved completely)
+- Target canvas size: ${targetDimensions.width} × ${targetDimensions.height} pixels
+- You need to ADD: ${targetDimensions.width - originalWidth} pixels width and ${targetDimensions.height - originalHeight} pixels height
+- Method: Place the original ${originalWidth}×${originalHeight} image in the center and use AI generative fill to create new background content in the surrounding empty space
+
+QUALITY REQUIREMENTS for the NEW generated areas only:
+1. Analyze the original image edges: colors, patterns, textures, lighting, shadows
+2. Generate seamless background content that continues the existing scene
+3. Perfect edge blending - no visible seams between original and generated areas
+4. Match the exact style, grain, and quality of the original photograph
+5. Maintain consistent perspective and lighting
+
+OUTPUT VERIFICATION:
+- Final dimensions: EXACTLY ${targetDimensions.width} × ${targetDimensions.height} pixels
+- Original content: 100% preserved at ${originalWidth} × ${originalHeight} pixels
+- Generated content: Only in the newly added border areas
+
+Remember: EXPAND the canvas by ADDING content. NEVER crop or remove any part of the original ${originalWidth}×${originalHeight} image.`
         },
         {
           inlineData: {
@@ -209,38 +244,77 @@ export class ImageProcessor {
         },
       ];
 
-      // Call nano banana model
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image-preview',
-        contents: prompt,
-      });
+      // Try up to MAX_RETRIES times
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`AI generative fill attempt ${attempt}/${MAX_RETRIES}...`);
 
-      // Process response
-      if (!response.candidates || response.candidates.length === 0) {
-        throw new Error('No candidates returned from nano banana model');
-      }
+          // Call nano banana model
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: prompt,
+          });
 
-      const candidate = response.candidates[0];
-      if (!candidate.content || !candidate.content.parts) {
-        throw new Error('No content parts returned from nano banana model');
-      }
-
-      for (const part of candidate.content.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          const processedImageData = part.inlineData.data;
-          const processedBuffer = Buffer.from(processedImageData, 'base64');
-          fs.writeFileSync(tempOutputPath, processedBuffer);
-
-          // Clean up temp input file
-          if (fs.existsSync(tempInputPath)) {
-            fs.unlinkSync(tempInputPath);
+          // Process response
+          if (!response.candidates || response.candidates.length === 0) {
+            throw new Error('No candidates returned from nano banana model');
           }
 
-          return processedBuffer;
+          const candidate = response.candidates[0];
+          if (!candidate.content || !candidate.content.parts) {
+            throw new Error('No content parts returned from nano banana model');
+          }
+
+          for (const part of candidate.content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+              const processedImageData = part.inlineData.data;
+              const processedBuffer = Buffer.from(processedImageData, 'base64');
+              fs.writeFileSync(tempOutputPath, processedBuffer);
+
+              // Validate output dimensions
+              const resultMetadata = await sharp(processedBuffer, { limitInputPixels: 1000000000 }).metadata();
+              const resultWidth = resultMetadata.width || 0;
+              const resultHeight = resultMetadata.height || 0;
+
+              console.log(`AI output dimensions: ${resultWidth} × ${resultHeight} (expected: ${targetDimensions.width} × ${targetDimensions.height})`);
+              console.log(`Original dimensions: ${originalWidth} × ${originalHeight}`);
+
+              // Check if AI properly expanded (not cropped)
+              if (resultWidth < originalWidth || resultHeight < originalHeight) {
+                throw new Error(`AI CROPPED the image! Output ${resultWidth}×${resultHeight} is smaller than original ${originalWidth}×${originalHeight}. Retrying...`);
+              }
+
+              // Warn if dimensions don't match target (but don't fail if it expanded)
+              if (resultWidth !== targetDimensions.width || resultHeight !== targetDimensions.height) {
+                console.warn(`AI dimensions ${resultWidth}×${resultHeight} don't exactly match target ${targetDimensions.width}×${targetDimensions.height}, but image was expanded (not cropped)`);
+              }
+
+              // Clean up temp input file
+              if (fs.existsSync(tempInputPath)) {
+                fs.unlinkSync(tempInputPath);
+              }
+
+              console.log(`AI generative fill succeeded on attempt ${attempt}/${MAX_RETRIES}`);
+              return processedBuffer;
+            }
+          }
+
+          throw new Error('No image data returned from nano banana model');
+        } catch (attemptError) {
+          lastError = attemptError instanceof Error ? attemptError : new Error(String(attemptError));
+          console.warn(`AI generative fill attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message);
+
+          // If this isn't the last attempt, wait a bit before retrying
+          if (attempt < MAX_RETRIES) {
+            const delayMs = attempt * 1000; // Incremental backoff: 1s, 2s
+            console.log(`Waiting ${delayMs}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
         }
       }
 
-      throw new Error('No image data returned from nano banana model');
+      // If we get here, all retries failed
+      throw new Error(`AI generative fill failed after ${MAX_RETRIES} attempts. Last error: ${lastError?.message}`)
     } catch (error) {
       // Clean up temp files
       try {
@@ -867,6 +941,629 @@ export class ImageProcessor {
     } catch (error) {
       console.warn('SVG optimization failed, returning unoptimized SVG:', error);
       return svgString;
+    }
+  }
+
+  /**
+   * Enhance image with AI-powered deblurring and sharpening
+   */
+  async enhanceImage(
+    imageBuffer: Buffer,
+    format: 'jpeg' | 'png' | 'webp' = 'jpeg'
+  ): Promise<ProcessedImage> {
+    if (!this.apiKey) {
+      throw new Error('Google AI API key not configured');
+    }
+
+    try {
+      const sharp = await this.getSharp();
+
+      // Defensive SVG handling: convert to raster if SVG is passed
+      let workingBuffer = imageBuffer;
+      const isSVGInput = await this.isSVG(imageBuffer);
+      if (isSVGInput) {
+        console.log('Converting SVG to raster for enhancement...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      // Create temporary file for input image
+      const tempDir = os.tmpdir();
+      const tempInputPath = path.join(tempDir, `enhance_input_${Date.now()}.jpg`);
+
+      try {
+        // Save input image to temp file
+        fs.writeFileSync(tempInputPath, workingBuffer);
+
+        // Initialize Google GenAI
+        const ai = new GoogleGenAI({ apiKey: this.apiKey });
+
+        // Read and encode image
+        const imageData = fs.readFileSync(tempInputPath);
+        const base64Image = imageData.toString('base64');
+
+        // Detect image format
+        const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+        const imageFormat = metadata.format || 'jpeg';
+
+        // Create prompt for enhancement
+        const prompt = [
+          {
+            text: `Enhance and sharpen this image with maximum clarity while preserving all fine details. Requirements:
+
+Deblur the image using advanced deconvolution techniques to reverse motion blur, defocus blur, and gaussian blur
+Sharpen all edges and lines to make them crisp and distinct - every line, edge, and boundary should be clearly defined
+Preserve fine details and textures - no smoothing or softening effects
+Enhance micro-details like text, patterns, and intricate elements
+Increase definition of all structural elements, contours, and boundaries
+Apply edge enhancement to make all lines stand out prominently
+Remove noise without blurring - use noise reduction that maintains sharpness
+Restore high-frequency details that may have been lost in the original image
+NO smoothing, NO soft filters, NO beauty effects - maintain natural texture and grain
+Enhance contrast locally to improve detail visibility
+Recover lost information from blurred or degraded areas using AI reconstruction
+Output should be crisp and sharp with every line, edge, and detail clearly visible and well-defined
+
+Focus on: clarity, sharpness, detail preservation, edge definition, and structural enhancement. The result should look like a high-quality, perfectly focused photograph with razor-sharp lines and details.`
+          },
+          {
+            inlineData: {
+              mimeType: `image/${imageFormat}`,
+              data: base64Image,
+            },
+          },
+        ];
+
+        // Call Gemini model
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image-preview',
+          contents: prompt,
+        });
+
+        // Process response
+        if (!response.candidates || response.candidates.length === 0) {
+          throw new Error('No candidates returned from Gemini model');
+        }
+
+        const candidate = response.candidates[0];
+        if (!candidate.content || !candidate.content.parts) {
+          throw new Error('No content parts returned from Gemini model');
+        }
+
+        for (const part of candidate.content.parts) {
+          if (part.inlineData && part.inlineData.data) {
+            const enhancedImageData = part.inlineData.data;
+            const enhancedBuffer = Buffer.from(enhancedImageData, 'base64');
+
+            // Clean up temp input file
+            if (fs.existsSync(tempInputPath)) {
+              fs.unlinkSync(tempInputPath);
+            }
+
+            // Optimize the enhanced image
+            const optimizedBuffer = await this.optimizeForWeb(enhancedBuffer, {
+              quality: 90,
+              format: format,
+              targetDimensions: { width: metadata.width || 0, height: metadata.height || 0 }
+            });
+
+            const finalMetadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+            return {
+              buffer: optimizedBuffer,
+              metadata: {
+                width: finalMetadata.width || metadata.width || 0,
+                height: finalMetadata.height || metadata.height || 0,
+                format: finalMetadata.format || format,
+                size: optimizedBuffer.length,
+              },
+            };
+          }
+        }
+
+        throw new Error('No image data returned from Gemini model');
+      } catch (error) {
+        // Clean up temp files
+        try {
+          if (fs.existsSync(tempInputPath)) {
+            fs.unlinkSync(tempInputPath);
+          }
+        } catch (cleanupError) {
+          console.warn('Failed to clean up temp files:', cleanupError);
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Image enhancement error:', error);
+      throw new Error(`Image enhancement failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Sharpen image using Sharp.js (fast, offline, no AI)
+   * @param imageBuffer - Input image buffer
+   * @param format - Output format
+   * @param sharpness - Sharpness level (1-10), default 5
+   */
+  async sharpenImage(
+    imageBuffer: Buffer,
+    format: 'jpeg' | 'png' | 'webp' = 'jpeg',
+    sharpness: number = 5
+  ): Promise<ProcessedImage> {
+    try {
+      const sharp = await this.getSharp();
+
+      // Defensive SVG handling: convert to raster if SVG is passed
+      let workingBuffer = imageBuffer;
+      const isSVGInput = await this.isSVG(imageBuffer);
+      if (isSVGInput) {
+        console.log('Converting SVG to raster for sharpening...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      // Get original metadata
+      const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+      // Convert sharpness level (1-10) to Sharp.js parameters
+      // sigma: standard deviation of Gaussian mask (0.3-3.0)
+      // flat: level of sharpening for flat areas (0.5-2.0)
+      // jagged: level of sharpening for jagged areas (0.5-3.0)
+      const sigma = 0.5 + (sharpness / 10) * 2.5;  // 0.5 to 3.0
+      const flat = 0.5 + (sharpness / 10) * 1.5;   // 0.5 to 2.0
+      const jagged = 1.0 + (sharpness / 10) * 2.0; // 1.0 to 3.0
+
+      // Apply sharpening
+      const sharpenedBuffer = await sharp(workingBuffer, {
+        limitInputPixels: 1000000000,
+        density: 300
+      })
+        .sharpen({
+          sigma: sigma,
+          m1: flat,     // flat area sharpness
+          m2: jagged,   // jagged area sharpness
+          x1: 2,        // threshold for flat areas
+          y2: 10,       // threshold for jagged areas
+          y3: 20        // maximum threshold
+        })
+        .toBuffer();
+
+      // Optimize for web with the specified format
+      const optimizedBuffer = await this.optimizeForWeb(sharpenedBuffer, {
+        quality: 90,
+        format: format,
+        targetDimensions: { width: metadata.width || 0, height: metadata.height || 0 }
+      });
+
+      const finalMetadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+      return {
+        buffer: optimizedBuffer,
+        metadata: {
+          width: finalMetadata.width || metadata.width || 0,
+          height: finalMetadata.height || metadata.height || 0,
+          format: finalMetadata.format || format,
+          size: optimizedBuffer.length,
+        },
+      };
+    } catch (error) {
+      console.error('Image sharpening error:', error);
+      throw new Error(`Image sharpening failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Rotate or flip image
+   * @param imageBuffer - Input image buffer
+   * @param operation - Transform operation
+   * @param customAngle - Custom rotation angle (for 'custom' operation)
+   * @param format - Output format
+   * @param quality - Output quality (0-100)
+   */
+  async rotateFlipImage(
+    imageBuffer: Buffer,
+    operation: 'rotate-90' | 'rotate-180' | 'rotate-270' | 'flip-horizontal' | 'flip-vertical' | 'custom',
+    customAngle: number = 0,
+    format: 'jpeg' | 'png' | 'webp' = 'jpeg',
+    quality: number = 90
+  ): Promise<ProcessedImage> {
+    try {
+      const sharp = await this.getSharp();
+
+      // Defensive SVG handling: convert to raster if SVG is passed
+      let workingBuffer = imageBuffer;
+      const isSVGInput = await this.isSVG(imageBuffer);
+      if (isSVGInput) {
+        console.log('Converting SVG to raster for rotation/flip...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      let pipeline = sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 });
+
+      // Apply transformation based on operation
+      switch (operation) {
+        case 'rotate-90':
+          pipeline = pipeline.rotate(90);
+          break;
+        case 'rotate-180':
+          pipeline = pipeline.rotate(180);
+          break;
+        case 'rotate-270':
+          pipeline = pipeline.rotate(270);
+          break;
+        case 'flip-horizontal':
+          pipeline = pipeline.flop();
+          break;
+        case 'flip-vertical':
+          pipeline = pipeline.flip();
+          break;
+        case 'custom':
+          pipeline = pipeline.rotate(customAngle, { background: { r: 255, g: 255, b: 255, alpha: 1 } });
+          break;
+      }
+
+      // Apply format-specific processing
+      switch (format) {
+        case 'jpeg':
+          pipeline = pipeline.jpeg({ quality });
+          break;
+        case 'png':
+          pipeline = pipeline.png({ quality });
+          break;
+        case 'webp':
+          pipeline = pipeline.webp({ quality });
+          break;
+      }
+
+      const transformedBuffer = await pipeline.toBuffer();
+      const metadata = await sharp(transformedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+      return {
+        buffer: transformedBuffer,
+        metadata: {
+          width: metadata.width || 0,
+          height: metadata.height || 0,
+          format: metadata.format || format,
+          size: transformedBuffer.length,
+        },
+      };
+    } catch (error) {
+      console.error('Image rotation/flip error:', error);
+      throw new Error(`Image rotation/flip failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Apply filter to image
+   * @param imageBuffer - Input image buffer
+   * @param filterType - Filter type
+   * @param intensity - Filter intensity (0-100)
+   * @param format - Output format
+   * @param quality - Output quality (0-100)
+   */
+  async applyFilter(
+    imageBuffer: Buffer,
+    filterType: 'grayscale' | 'sepia' | 'noir' | 'warm' | 'cool' | 'vibrant' | 'dramatic' | 'soft-focus',
+    intensity: number = 100,
+    format: 'jpeg' | 'png' | 'webp' = 'jpeg',
+    quality: number = 90
+  ): Promise<ProcessedImage> {
+    try {
+      const sharp = await this.getSharp();
+
+      // Defensive SVG handling: convert to raster if SVG is passed
+      let workingBuffer = imageBuffer;
+      const isSVGInput = await this.isSVG(imageBuffer);
+      if (isSVGInput) {
+        console.log('Converting SVG to raster for filter application...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      let pipeline = sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 });
+      const normalizedIntensity = intensity / 100; // 0-1 range
+
+      // Apply filter based on type
+      switch (filterType) {
+        case 'grayscale':
+          pipeline = pipeline.grayscale();
+          break;
+
+        case 'sepia':
+          // Sepia tone effect (warm brownish)
+          pipeline = pipeline
+            .recomb([
+              [0.393, 0.769, 0.189],
+              [0.349, 0.686, 0.168],
+              [0.272, 0.534, 0.131]
+            ]);
+          break;
+
+        case 'noir':
+          // High contrast black and white
+          pipeline = pipeline
+            .grayscale()
+            .normalise()
+            .linear(1.5, -(128 * 0.5));
+          break;
+
+        case 'warm':
+          // Warm tones (increase red/yellow)
+          pipeline = pipeline
+            .modulate({
+              brightness: 1.0,
+              saturation: 1.1
+            })
+            .tint({ r: 255, g: 220, b: 180 });
+          break;
+
+        case 'cool':
+          // Cool tones (increase blue)
+          pipeline = pipeline
+            .modulate({
+              brightness: 1.0,
+              saturation: 1.1
+            })
+            .tint({ r: 180, g: 220, b: 255 });
+          break;
+
+        case 'vibrant':
+          // Increase saturation and contrast
+          pipeline = pipeline
+            .modulate({
+              brightness: 1.05,
+              saturation: 1.5
+            })
+            .linear(1.2, -(128 * 0.2));
+          break;
+
+        case 'dramatic':
+          // High contrast with deep shadows
+          pipeline = pipeline
+            .modulate({
+              brightness: 1.0,
+              saturation: 1.2
+            })
+            .linear(1.3, -(128 * 0.3));
+          break;
+
+        case 'soft-focus':
+          // Soft focus with slight blur
+          pipeline = pipeline
+            .blur(2)
+            .modulate({
+              brightness: 1.05,
+              saturation: 0.9
+            });
+          break;
+      }
+
+      // Apply format-specific processing
+      switch (format) {
+        case 'jpeg':
+          pipeline = pipeline.jpeg({ quality });
+          break;
+        case 'png':
+          pipeline = pipeline.png({ quality });
+          break;
+        case 'webp':
+          pipeline = pipeline.webp({ quality });
+          break;
+      }
+
+      const filteredBuffer = await pipeline.toBuffer();
+
+      // If intensity is less than 100%, blend with original
+      let finalBuffer: Buffer;
+      if (intensity < 100 && intensity > 0) {
+        // Composite filtered image with original based on intensity
+        finalBuffer = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 })
+          .composite([{
+            input: await sharp(filteredBuffer, { limitInputPixels: 1000000000, density: 300 })
+              .ensureAlpha()
+              .linear(1, normalizedIntensity * 255 - 255)
+              .toBuffer(),
+            blend: 'over'
+          }])
+          .toFormat(format as keyof import('sharp').FormatEnum, { quality })
+          .toBuffer();
+      } else {
+        finalBuffer = filteredBuffer;
+      }
+
+      const metadata = await sharp(finalBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+      return {
+        buffer: finalBuffer,
+        metadata: {
+          width: metadata.width || 0,
+          height: metadata.height || 0,
+          format: metadata.format || format,
+          size: finalBuffer.length,
+        },
+      };
+    } catch (error) {
+      console.error('Image filter error:', error);
+      throw new Error(`Image filter application failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Convert image format
+   * @param imageBuffer - Input image buffer
+   * @param targetFormat - Target format
+   * @param quality - Output quality (0-100)
+   */
+  async convertFormat(
+    imageBuffer: Buffer,
+    targetFormat: 'jpeg' | 'png' | 'webp' | 'svg',
+    quality: number = 90
+  ): Promise<ProcessedImage> {
+    try {
+      const sharp = await this.getSharp();
+
+      // Check if input is SVG
+      const isSVGInput = await this.isSVG(imageBuffer);
+
+      // If converting from SVG to SVG, just optimize
+      if (isSVGInput && targetFormat === 'svg') {
+        const svgString = imageBuffer.toString('utf-8');
+        const optimizedSVG = await this.optimizeSVG(svgString);
+        const resultBuffer = Buffer.from(optimizedSVG, 'utf-8');
+
+        return {
+          buffer: resultBuffer,
+          metadata: {
+            width: 0,
+            height: 0,
+            format: 'svg',
+            size: resultBuffer.length,
+          },
+        };
+      }
+
+      // If input is SVG and target is not SVG, convert to raster first
+      let workingBuffer = imageBuffer;
+      if (isSVGInput && targetFormat !== 'svg') {
+        console.log('Converting SVG to raster format...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+      const pipeline = sharp(workingBuffer, { limitInputPixels: 1000000000, density: 300 });
+
+      // Convert to target format
+      let convertedBuffer: Buffer;
+      switch (targetFormat) {
+        case 'jpeg':
+          convertedBuffer = await pipeline.jpeg({ quality, progressive: true }).toBuffer();
+          break;
+        case 'png':
+          // PNG quality in sharp is compression level (0-9), convert from 0-100 scale
+          const pngCompression = Math.round((100 - quality) / 100 * 9);
+          convertedBuffer = await pipeline.png({ compressionLevel: pngCompression }).toBuffer();
+          break;
+        case 'webp':
+          convertedBuffer = await pipeline.webp({ quality }).toBuffer();
+          break;
+        case 'svg':
+          // Convert raster to SVG by embedding as data URI
+          const pngBuffer = await pipeline.png({ quality: 100 }).toBuffer();
+          const base64Image = pngBuffer.toString('base64');
+          const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${metadata.width}" height="${metadata.height}" viewBox="0 0 ${metadata.width} ${metadata.height}">
+  <image width="${metadata.width}" height="${metadata.height}" xlink:href="data:image/png;base64,${base64Image}"/>
+</svg>`;
+          convertedBuffer = Buffer.from(svgContent, 'utf-8');
+          break;
+        default:
+          throw new Error(`Unsupported target format: ${targetFormat}`);
+      }
+
+      const finalMetadata = targetFormat === 'svg'
+        ? { width: metadata.width || 0, height: metadata.height || 0, format: 'svg' as const }
+        : await sharp(convertedBuffer, { limitInputPixels: 1000000000, density: 300 }).metadata();
+
+      return {
+        buffer: convertedBuffer,
+        metadata: {
+          width: finalMetadata.width || metadata.width || 0,
+          height: finalMetadata.height || metadata.height || 0,
+          format: finalMetadata.format || targetFormat,
+          size: convertedBuffer.length,
+        },
+      };
+    } catch (error) {
+      console.error('Format conversion error:', error);
+      throw new Error(`Format conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Auto-upscale image if it's below 100KB to reach 150-200KB range
+   * @param processedImage - The processed image to potentially upscale
+   * @returns ProcessedImage with wasUpscaled flag in metadata
+   */
+  async autoUpscaleIfNeeded(processedImage: ProcessedImage): Promise<ProcessedImage & { wasUpscaled?: boolean }> {
+    const TARGET_MIN_SIZE = 100 * 1024; // 100 KB
+    const TARGET_SIZE_RANGE = { min: 150 * 1024, max: 200 * 1024 }; // 150-200 KB
+
+    if (processedImage.buffer.length >= TARGET_MIN_SIZE) {
+      return { ...processedImage, wasUpscaled: false };
+    }
+
+    try {
+      console.log(`Image size ${(processedImage.buffer.length / 1024).toFixed(2)} KB is below 100 KB threshold, upscaling...`);
+
+      const sharp = await this.getSharp();
+
+      // Calculate scale factor to reach target size
+      // File size roughly scales with pixel count for same quality
+      const currentSize = processedImage.buffer.length;
+      const targetSize = (TARGET_SIZE_RANGE.min + TARGET_SIZE_RANGE.max) / 2;
+      const sizeRatio = targetSize / currentSize;
+
+      // Scale factor is square root of size ratio (since size ~ width * height)
+      const scaleFactor = Math.sqrt(sizeRatio);
+      const clampedScaleFactor = Math.min(scaleFactor, 4.0); // Cap at 4x
+
+      const newWidth = Math.round(processedImage.metadata.width * clampedScaleFactor);
+      const newHeight = Math.round(processedImage.metadata.height * clampedScaleFactor);
+
+      console.log(`Upscaling from ${processedImage.metadata.width}x${processedImage.metadata.height} to ${newWidth}x${newHeight} (${clampedScaleFactor.toFixed(2)}x)`);
+
+      // Use Lanczos3 for high-quality upscaling
+      const upscaledBuffer = await sharp(processedImage.buffer, {
+        limitInputPixels: 1000000000
+      })
+        .resize(newWidth, newHeight, {
+          kernel: 'lanczos3',
+          fit: 'fill'
+        })
+        .jpeg({ quality: 90, progressive: true })
+        .toBuffer();
+
+      const upscaledMetadata = await sharp(upscaledBuffer, {
+        limitInputPixels: 1000000000
+      }).metadata();
+
+      console.log(`Upscaled image size: ${(upscaledBuffer.length / 1024).toFixed(2)} KB`);
+
+      return {
+        buffer: upscaledBuffer,
+        metadata: {
+          width: upscaledMetadata.width || newWidth,
+          height: upscaledMetadata.height || newHeight,
+          format: upscaledMetadata.format || processedImage.metadata.format,
+          size: upscaledBuffer.length,
+        },
+        wasUpscaled: true,
+      };
+    } catch (error) {
+      console.warn('Auto-upscaling failed, returning original:', error);
+      return { ...processedImage, wasUpscaled: false };
     }
   }
 }

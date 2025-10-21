@@ -1,102 +1,135 @@
 # AI Image Processing Suite - Data Flow Diagrams
 
-This document contains comprehensive data flow diagrams for all four processing modes in the AI Image Processing Suite. All diagrams are in Mermaid.js format for easy visualization and documentation.
+This document contains comprehensive data flow diagrams for all five processing modes in the AI Image Processing Suite. All diagrams are in Mermaid.js format for easy visualization and documentation.
+
+> **Last Updated**: Synchronized with actual implementation (5 modes, 7 API routes)
 
 ## Table of Contents
 
 1. [Component Architecture](#component-architecture)
 2. [AI Image Resizing Flow](#ai-image-resizing-flow)
 3. [Manual Cropping Flow](#manual-cropping-flow)
-4. [Upscaling Flow](#upscaling-flow)
-5. [Image Compression Flow](#image-compression-flow)
-6. [Format-Specific Processing Flows](#format-specific-processing-flows)
-7. [Large Image Upload Flow](#large-image-upload-flow)
-8. [Integration Flow](#integration-flow)
+4. [Image Compression Flow](#image-compression-flow)
+5. [Image Enhancement Flow](#image-enhancement-flow)
+6. [Rotate & Flip Flow](#rotate--flip-flow)
+7. [Format Conversion Flow](#format-conversion-flow)
+8. [Chain Operations Flow](#chain-operations-flow)
+9. [Format-Specific Processing Flows](#format-specific-processing-flows)
+10. [Large Image Upload Flow](#large-image-upload-flow)
+11. [Integration Flow](#integration-flow)
 
 ---
 
 ## Component Architecture
 
-High-level component architecture showing how all four modes integrate with shared components and APIs.
+High-level component architecture showing how all five modes integrate with shared components and APIs, including the chain operations feature.
 
 ```mermaid
 graph TD
     A[Main Page] --> B[Mode Selection]
     B --> C[AI Image Resizing]
     B --> D[Manual Cropping]
-    B --> E[Upscaling]
-    B --> F[Image Compression]
+    B --> E[Image Compression]
+    B --> F[Image Enhancement]
+    B --> G[Rotate & Flip]
 
-    C --> G[ImageUploader]
-    C --> H[DimensionSelector]
-    C --> I[ImagePreview]
-    C --> J[ProcessingStatus]
+    C --> H[ImageUploader]
+    C --> I[DimensionSelector]
+    C --> J[ImagePreview]
+    C --> K[ProcessingStatus]
+    C --> EDIT1[Edit Again Button]
 
-    D --> K[ImageUploader]
-    D --> L[Interactive Canvas]
-    D --> M[Crop Controls]
-    D --> N[Zoom Controls]
-    D --> O[Sidebar with Batch Items]
+    D --> L[ImageUploader]
+    D --> M[Interactive Canvas]
+    D --> N[Crop Controls]
+    D --> O[Zoom Controls]
+    D --> P[Sidebar with Batch Items]
+    D --> EDIT2[Edit Again Button]
 
-    E --> P[ImageUploader]
-    E --> Q[Sidebar with Batch Items]
-    E --> R[Scale Selector]
-    E --> S[Quality Controls]
+    E --> Q[ImageUploader]
+    E --> R[Sidebar with Batch Items]
+    E --> S[Target Size Slider]
     E --> T[Batch Actions]
+    E --> U[Preview & Stats]
+    E --> EDIT3[Edit Again Button]
 
-    F --> U[ImageUploader]
-    F --> V[Sidebar with Batch Items]
-    F --> W[Target Size Slider]
-    F --> X[Batch Actions]
-    F --> Y[Preview & Stats]
+    F --> V[ImageUploader]
+    F --> W[Sidebar with Batch Items]
+    F --> X[Enhancement Controls]
+    F --> Y[Batch Actions]
+    F --> EDIT4[Edit Again Button]
 
-    Q --> Z[Batch Item List]
-    V --> Z
-    O --> Z
+    G --> Z[ImageUploader]
+    G --> AA[Sidebar with Batch Items]
+    G --> AB[Rotation Controls]
+    G --> AC[Batch Actions]
+    G --> EDIT5[Edit Again Button]
 
-    Z --> AA[Image Thumbnails]
-    Z --> AB[Status Icons]
-    Z --> AC[Per-Image Settings]
+    EDIT1 --> CHAIN[Chain Operations Handler]
+    EDIT2 --> CHAIN
+    EDIT3 --> CHAIN
+    EDIT4 --> CHAIN
+    EDIT5 --> CHAIN
+    CHAIN --> B
 
-    G --> AD[useFileUpload Hook]
-    K --> AD
+    R --> AD[Batch Item List]
+    W --> AD
+    AA --> AD
     P --> AD
-    U --> AD
 
-    I --> AE[useImageProcessing Hook]
-    M --> AF[Manual Crop Logic]
-    T --> AG[useUpscaling Hook]
-    X --> AH[Compression Logic]
+    AD --> AE[Image Thumbnails]
+    AD --> AF[Status Icons]
+    AD --> AG[Per-Image Settings]
 
-    AD --> AI[File Handler]
-    AE --> AJ[AI Image Processor]
-    AF --> AK[Crop Processor]
-    AG --> AL[Upscale Processor]
-    AH --> AM[Compression Processor]
+    H --> AH[useFileUpload Hook]
+    L --> AH
+    Q --> AH
+    V --> AH
+    Z --> AH
 
-    AI --> AN[Upload API]
-    AJ --> AO[Process API]
-    AK --> AP[Compress API]
-    AL --> AQ[Upscale API]
-    AM --> AR[Compress-Image API]
+    J --> AI[useImageProcessing Hook]
+    N --> AJ[Manual Crop Logic]
+    T --> AK[Compression Logic]
+    Y --> AL[Enhancement Logic]
+    AC --> AM[Transform Logic]
 
-    AO --> AS[Gemini AI]
-    AO --> AT[Sharp.js Edge Extension]
-    AP --> AU[Sharp.js Cropping]
-    AQ --> AV[Advanced Interpolation]
-    AQ --> AW[Detail Enhancement]
-    AR --> AX[MozJPEG/PNG/WebP Compression]
-    AR --> AY[Iterative Quality Adjustment]
+    AH --> AN[File Handler]
+    AI --> AO[AI Image Processor]
+    AJ --> AP[Crop Processor]
+    AK --> AQ[Compression Processor]
+    AL --> AR[Enhancement Processor]
+    AM --> AS[Transform Processor]
 
-    T --> AZ[JSZip for Batch Download]
-    X --> AZ
+    AN --> AT[Upload API]
+    AO --> AU[Process API]
+    AP --> AV[Compress API]
+    AQ --> AW[Compress-Image API]
+    AR --> AX[Enhance API]
+    AS --> AY[Rotate-Flip API]
+
+    AT --> AYY[Convert-Format API]
+
+    AU --> AZ[Gemini AI]
+    AU --> BA[Sharp.js Edge Extension]
+    AV --> BB[Sharp.js Cropping]
+    AW --> BC[MozJPEG/PNG/WebP Compression]
+    AW --> BD[Iterative Quality Adjustment]
+    AX --> BE[ONNX Enhancement Models]
+    AY --> BF[Sharp.js Transformations]
+    AYY --> BF
+
+    T --> BG[JSZip for Batch Download]
+    Y --> BG
+    AC --> BG
 
     style C fill:#e1f5ff
     style D fill:#fff4e1
     style E fill:#ffe1f5
     style F fill:#e1ffe1
-    style AS fill:#ff9999
-    style AT fill:#99ccff
+    style G fill:#f5e1ff
+    style CHAIN fill:#ffd700
+    style AZ fill:#ff9999
+    style BA fill:#99ccff
 ```
 
 ---
@@ -241,14 +274,9 @@ flowchart TD
     FormatOut -->|PNG| PNGCrop[PNG Compression<br/>- Quality: 80-85%<br/>- CompressionLevel: 9<br/>- Palette: optimize]
     FormatOut -->|WebP| WebPCrop[WebP Compression<br/>- Quality: 80-85%<br/>- Modern codec<br/>- Better compression]
 
-    JPEGCrop --> CloudConvert{Primary<br/>Success?}
-    PNGCrop --> CloudConvert
-    WebPCrop --> CloudConvert
-
-    CloudConvert -->|Fail| FallbackSharp[Fallback to Sharp.js<br/>Same format settings<br/>route.ts:66-122]
-    CloudConvert -->|Success| GenMetadata[Generate Metadata<br/>- Original size<br/>- Compressed size<br/>- Compression ratio<br/>- MIME type]
-
-    FallbackSharp --> GenMetadata
+    JPEGCrop --> GenMetadata[Generate Metadata<br/>- Original size<br/>- Compressed size<br/>- Compression ratio<br/>- MIME type]
+    PNGCrop --> GenMetadata
+    WebPCrop --> GenMetadata
 
     GenMetadata --> UpdateStatus[Update Image Status<br/>Status: completed<br/>Display checkmark]
 
@@ -282,85 +310,81 @@ flowchart TD
 
 ---
 
-## Upscaling Flow
+## Image Enhancement Flow
 
-Flow diagram for image upscaling with Lanczos3 interpolation and batch processing support.
+Flow diagram for AI-powered image enhancement with deblurring and sharpening using ONNX models.
 
 ```mermaid
 flowchart TD
     Start([User Upload Images<br/>Single or Multiple]) --> Upload[/Upload to /api/upload/]
 
-    Upload --> Validate{File Validation<br/>Each File}
+    Upload --> Validate{File Validation}
     Validate -->|Invalid| Error1[Display Error Message]
-    Validate -->|Valid| Extract[Extract Metadata<br/>- Format: JPEG/PNG/WebP/SVG<br/>- Original dimensions<br/>- File size]
+    Validate -->|Valid| Extract[Extract Metadata<br/>- Format: JPEG/PNG/WebP/SVG<br/>- Dimensions<br/>- File size]
 
-    Extract --> CreateQueue[Create Batch Queue<br/>- Status: pending<br/>- Unique IDs<br/>- Store metadata]
+    Extract --> CreateQueue[Create Batch Queue<br/>- Status: pending<br/>- Unique IDs]
 
-    CreateQueue --> DisplaySidebar[Display in Sidebar<br/>- Thumbnails<br/>- Dimensions<br/>- Clock icon pending]
+    CreateQueue --> DisplaySidebar[Display in Sidebar<br/>- Thumbnails<br/>- Status icons<br/>- File info]
 
     DisplaySidebar --> UserChoice{User Action}
 
-    UserChoice -->|Select Image| ShowSettings[Show Settings Panel<br/>- Scale factor selector<br/>- Target resolution inputs<br/>- Quality slider<br/>- Per-image customization]
+    UserChoice -->|Select Image| ShowSettings[Show Enhancement Settings<br/>- Method: Deblur/Sharpen/Auto<br/>- Sharpness slider<br/>- Per-image customization]
 
-    UserChoice -->|Upscale All| BatchDefault[Use Default Settings<br/>Scale: 2x<br/>Quality: 80%]
+    UserChoice -->|Enhance All| BatchDefault[Use Default Settings<br/>Method: Auto<br/>Sharpness: Medium]
 
-    ShowSettings --> ConfigSettings[Configure Settings<br/>- Scale: 1.1x to 4x<br/>- Target width/height<br/>- Quality: 10-100%<br/>- Format: JPEG/PNG/WebP]
+    ShowSettings --> ConfigSettings[Configure Settings<br/>- Select enhancement method<br/>- Adjust sharpness: 0-100<br/>- Preview changes]
 
-    ConfigSettings --> SingleUpscale[User Clicks<br/>'Upscale This Image']
+    ConfigSettings --> SingleEnhance[User Clicks<br/>'Enhance This Image']
 
-    SingleUpscale --> UpscaleAPI[/Send to /api/upscale/]
-    BatchDefault --> UpscaleAPI
+    SingleEnhance --> EnhanceAPI[/Send to /api/enhance/]
+    BatchDefault --> EnhanceAPI
 
-    UpscaleAPI --> CheckSVG{Is SVG?}
+    EnhanceAPI --> CheckSVG{Is SVG?}
 
-    CheckSVG -->|Yes| ConvertSVG[Convert SVG to PNG<br/>- Density: 300 DPI<br/>- limitInputPixels: 1B<br/>route.ts:49-63]
-    CheckSVG -->|No| GetMetadata[Get Image Metadata<br/>- Original width/height<br/>- Format<br/>- Color space]
+    CheckSVG -->|Yes| ConvertSVG[Convert SVG to PNG<br/>- Density: 300 DPI<br/>- High-quality raster]
+    CheckSVG -->|No| LoadONNX[Load ONNX Model<br/>- Client-side processing<br/>- AI enhancement models]
 
-    ConvertSVG --> GetMetadata
+    ConvertSVG --> LoadONNX
 
-    GetMetadata --> ValidateDims{Validate<br/>Dimensions}
+    LoadONNX --> SelectMethod{Enhancement<br/>Method}
 
-    ValidateDims -->|Target < Original| Error2[Error: Target must be<br/>≥ original dimensions]
-    ValidateDims -->|Valid| ValidateScale{Validate<br/>Scale Factor}
+    SelectMethod -->|Deblur| DeblurModel[Deblur ONNX Model<br/>- Reduce motion blur<br/>- Restore sharpness]
+    SelectMethod -->|Sharpen| SharpenModel[Sharpen ONNX Model<br/>- Edge enhancement<br/>- Detail improvement]
+    SelectMethod -->|Auto| AutoDetect[Auto Detection<br/>- Analyze image<br/>- Select best method]
 
-    ValidateScale -->|< 1.1x| Error3[Error: Minimum<br/>scale is 1.1x]
-    ValidateScale -->|> 4x| Error4[Error: Maximum<br/>scale is 4x]
-    ValidateScale -->|Valid| Lanczos[Lanczos3 Upscaling<br/>route.ts:82-90<br/>- Kernel: lanczos3<br/>- 6×6 neighborhood<br/>- Superior edge preservation]
+    AutoDetect --> DeblurModel
 
-    Lanczos --> InitialOut[Initial Output<br/>- Format: JPEG<br/>- Quality: specified<br/>- Progressive: true]
+    DeblurModel --> ApplySharpness
+    SharpenModel --> ApplySharpness
 
-    InitialOut --> FinalFormat{Final Format<br/>Selection}
+    ApplySharpness[Apply Sharpness Setting<br/>- User-specified intensity<br/>- Range: 0-100]
 
-    FinalFormat -->|JPEG| JPEGOut[JPEG Output<br/>- Progressive: true<br/>- Quality: 80% default<br/>- Optimized Huffman<br/>route.ts:106]
-    FinalFormat -->|PNG| PNGOut[PNG Output<br/>- Lossless<br/>- Quality parameter<br/>- Compression: auto<br/>route.ts:100]
-    FinalFormat -->|WebP| WebPOut[WebP Output<br/>- Quality: 80% default<br/>- VP8 codec<br/>- Better compression<br/>route.ts:102]
+    ApplySharpness --> CheckSize{Image Size<br/>< 100KB?}
 
-    JPEGOut --> GetFinalMeta[Get Final Metadata<br/>- Actual dimensions<br/>- File size<br/>- Format confirmation]
-    PNGOut --> GetFinalMeta
-    WebPOut --> GetFinalMeta
+    CheckSize -->|Yes| AutoUpscale[Auto-Upscale<br/>- Target: 190-200KB<br/>- Maintain quality]
+    CheckSize -->|No| FinalOutput
 
-    GetFinalMeta --> UpdateStatus[Update Image Status<br/>- Status: completed<br/>- Show checkmark<br/>- Display new dimensions]
+    AutoUpscale --> FinalOutput[Generate Final Output<br/>- Enhanced image<br/>- Format: JPEG/PNG/WebP]
 
-    UpdateStatus --> CheckQueue{More Images<br/>in Queue?}
+    FinalOutput --> UpdateStatus[Update Status<br/>- Status: completed<br/>- Show checkmark]
 
-    CheckQueue -->|Yes| NextImage[Process Next Image<br/>Status: pending → processing]
-    CheckQueue -->|No| AllComplete[All Images Processed<br/>Display completion message]
+    UpdateStatus --> CheckQueue{More Images?}
 
-    NextImage --> UpscaleAPI
+    CheckQueue -->|Yes| NextImage[Process Next Image]
+    CheckQueue -->|No| AllComplete[All Images Enhanced]
 
-    AllComplete --> DisplayResults[Display Results<br/>- Before/After preview<br/>- Dimension comparison<br/>- Quality metrics]
+    NextImage --> EnhanceAPI
+
+    AllComplete --> DisplayResults[Display Results<br/>- Before/After preview<br/>- Enhancement details]
 
     DisplayResults --> DownloadChoice{Download Option}
 
-    DownloadChoice -->|Single| DownloadOne([Download Individual<br/>Upscaled Image])
-    DownloadChoice -->|Batch| DownloadZip[Generate ZIP File<br/>JSZip library<br/>All upscaled images]
+    DownloadChoice -->|Single| DownloadOne([Download Individual])
+    DownloadChoice -->|Batch| DownloadZip[Generate ZIP<br/>All enhanced images]
 
     DownloadZip --> DownloadAll([Download ZIP Archive])
 
     Error1 --> End([End])
-    Error2 --> End
-    Error3 --> End
-    Error4 --> End
     DownloadOne --> End
     DownloadAll --> End
 
@@ -368,11 +392,224 @@ flowchart TD
     style DownloadOne fill:#FFB6C1
     style DownloadAll fill:#FFB6C1
     style End fill:#FFB6C1
-    style Lanczos fill:#87CEEB
+    style LoadONNX fill:#87CEEB
     style Error1 fill:#FF6B6B
-    style Error2 fill:#FF6B6B
-    style Error3 fill:#FF6B6B
-    style Error4 fill:#FF6B6B
+```
+
+---
+
+## Rotate & Flip Flow
+
+Flow diagram for instant image transformations (rotations and flips) with batch processing.
+
+```mermaid
+flowchart TD
+    Start([User Upload Images<br/>Single or Multiple]) --> Upload[/Upload to /api/upload/]
+
+    Upload --> Validate{File Validation}
+    Validate -->|Invalid| Error1[Display Error Message]
+    Validate -->|Valid| Extract[Extract Metadata<br/>- Format: JPEG/PNG/WebP/SVG<br/>- Dimensions]
+
+    Extract --> CreateQueue[Create Batch Queue<br/>- Status: pending<br/>- Unique IDs]
+
+    CreateQueue --> DisplaySidebar[Display in Sidebar<br/>- Thumbnails<br/>- Status icons<br/>- Dimensions]
+
+    DisplaySidebar --> UserChoice{User Action}
+
+    UserChoice -->|Select Image| ShowSettings[Show Transform Settings<br/>- Rotation options<br/>- Flip options<br/>- Custom angle]
+
+    UserChoice -->|Transform All| BatchDefault[Use Default Settings<br/>Operation: Rotate 90°]
+
+    ShowSettings --> ConfigSettings[Configure Settings<br/>- Rotation: 90°/180°/270°<br/>- Flip: H/V<br/>- Custom angle: 0-360°]
+
+    ConfigSettings --> SingleTransform[User Clicks<br/>'Transform This Image']
+
+    SingleTransform --> TransformAPI[/Send to /api/rotate-flip/]
+    BatchDefault --> TransformAPI
+
+    TransformAPI --> CheckSVG{Is SVG?}
+
+    CheckSVG -->|Yes| ConvertSVG[Convert SVG to PNG<br/>- Density: 300 DPI]
+    CheckSVG -->|No| ParseOperation[Parse Operation<br/>- Extract rotation angle<br/>- Extract flip direction]
+
+    ConvertSVG --> ParseOperation
+
+    ParseOperation --> ApplyOperations[Apply Transformations<br/>Sharp.js transforms<br/>- rotate<br/>- flip/flop]
+
+    ApplyOperations --> QuickRotate{Quick<br/>Rotation?}
+
+    QuickRotate -->|90°/180°/270°| FastRotate[Lossless Rotation<br/>- No quality loss<br/>- Fast processing]
+    QuickRotate -->|Custom Angle| CustomRotate[Custom Rotation<br/>- Any degree 0-360°<br/>- Background fill]
+
+    FastRotate --> FlipCheck
+    CustomRotate --> FlipCheck
+
+    FlipCheck{Flip<br/>Operation?}
+
+    FlipCheck -->|Horizontal| FlipH[Horizontal Flip<br/>Sharp.js flop]
+    FlipCheck -->|Vertical| FlipV[Vertical Flip<br/>Sharp.js flip]
+    FlipCheck -->|None| FinalOutput
+
+    FlipH --> FinalOutput[Generate Output<br/>- JPEG format<br/>- Quality: 90%]
+    FlipV --> FinalOutput
+
+    FinalOutput --> UpdateStatus[Update Status<br/>- Status: completed<br/>- Show checkmark]
+
+    UpdateStatus --> CheckQueue{More Images?}
+
+    CheckQueue -->|Yes| NextImage[Process Next Image]
+    CheckQueue -->|No| AllComplete[All Images Transformed]
+
+    NextImage --> TransformAPI
+
+    AllComplete --> DisplayResults[Display Results<br/>- Before/After preview<br/>- Transformation details]
+
+    DisplayResults --> DownloadChoice{Download Option}
+
+    DownloadChoice -->|Single| DownloadOne([Download Individual])
+    DownloadChoice -->|Batch| DownloadZip[Generate ZIP<br/>All transformed images]
+
+    DownloadZip --> DownloadAll([Download ZIP Archive])
+
+    Error1 --> End([End])
+    DownloadOne --> End
+    DownloadAll --> End
+
+    style Start fill:#90EE90
+    style DownloadOne fill:#FFB6C1
+    style DownloadAll fill:#FFB6C1
+    style End fill:#FFB6C1
+    style ApplyOperations fill:#87CEEB
+    style Error1 fill:#FF6B6B
+```
+
+---
+
+## Format Conversion Flow
+
+Flow diagram for converting images between different formats (JPEG, PNG, WebP, SVG).
+
+```mermaid
+flowchart TD
+    Start([User Upload Image]) --> Upload[/Upload to /api/upload/]
+
+    Upload --> Validate{File Validation}
+    Validate -->|Invalid| Error1[Display Error Message]
+    Validate -->|Valid| Extract[Extract Metadata<br/>- Current format<br/>- Dimensions<br/>- File size]
+
+    Extract --> DisplayCurrent[Display Current Format<br/>- Format icon<br/>- Format name<br/>- File size]
+
+    DisplayCurrent --> ShowFormats[Show Available Formats<br/>- JPEG, PNG, WebP, SVG<br/>- Exclude current format]
+
+    ShowFormats --> UserSelect[User Selects<br/>Target Format]
+
+    UserSelect --> ConvertAPI[/Send to /api/convert-format/]
+
+    ConvertAPI --> ParseRequest[Parse Request<br/>- Image data<br/>- Target format<br/>- Quality settings]
+
+    ParseRequest --> CheckSource{Source<br/>Format?}
+
+    CheckSource -->|SVG| ConvertSVG[Convert SVG to Raster<br/>- Density: 300 DPI<br/>- Target: PNG first]
+    CheckSource -->|Raster| ProcessRaster[Process Raster Image<br/>JPEG/PNG/WebP]
+
+    ConvertSVG --> CheckTarget
+    ProcessRaster --> CheckTarget
+
+    CheckTarget{Target<br/>Format?}
+
+    CheckTarget -->|JPEG| ToJPEG[Convert to JPEG<br/>- Quality: 90%<br/>- MozJPEG encoder<br/>- Progressive: true<br/>- Flatten transparency]
+    CheckTarget -->|PNG| ToPNG[Convert to PNG<br/>- CompressionLevel: 9<br/>- Preserve transparency<br/>- Palette optimization]
+    CheckTarget -->|WebP| ToWebP[Convert to WebP<br/>- Quality: 90%<br/>- VP8 codec<br/>- Preserve transparency]
+    CheckTarget -->|SVG| ToSVG[Embed in SVG<br/>- Raster to base64<br/>- SVG wrapper<br/>- Preserve dimensions]
+
+    ToJPEG --> Optimize[Optimize Output<br/>- Format-specific settings<br/>- Quality preservation]
+    ToPNG --> Optimize
+    ToWebP --> Optimize
+    ToSVG --> Optimize
+
+    Optimize --> CalcSize[Calculate File Size<br/>- Original size<br/>- Converted size<br/>- Size difference]
+
+    CalcSize --> GenResponse[Generate Response<br/>- Converted image data<br/>- New format<br/>- File size stats]
+
+    GenResponse --> DisplayResult[Display Result<br/>- Before/After preview<br/>- Format change indicator<br/>- File size comparison]
+
+    DisplayResult --> Download([Download Converted<br/>Image])
+
+    Error1 --> End([End])
+    Download --> End
+
+    style Start fill:#90EE90
+    style Download fill:#FFB6C1
+    style End fill:#FFB6C1
+    style ToJPEG fill:#FFD700
+    style ToPNG fill:#87CEEB
+    style ToWebP fill:#98FB98
+    style ToSVG fill:#FFA07A
+    style Error1 fill:#FF6B6B
+```
+
+---
+
+## Chain Operations Flow
+
+Flow diagram showing how users can chain multiple operations across different modes.
+
+```mermaid
+flowchart TD
+    Start([User Starts with Any Mode]) --> ProcessMode1[Process in Mode A<br/>e.g., Compression]
+
+    ProcessMode1 --> Complete1[Processing Complete<br/>Display processed image]
+
+    Complete1 --> UserAction1{User Choice}
+
+    UserAction1 -->|Download| Download1([Download & End])
+    UserAction1 -->|Edit Again| EditAgain1[Click "Edit Again" Button]
+
+    EditAgain1 --> ConvertToFile[Convert Processed Image<br/>- base64 to Blob<br/>- Create File object<br/>- Preserve metadata]
+
+    ConvertToFile --> StoreProcImg[Store Processed Image<br/>- Image data<br/>- Filename<br/>- MIME type]
+
+    StoreProcImg --> ReturnToModes[Navigate to Mode Selection<br/>With processed image]
+
+    ReturnToModes --> SelectMode2[User Selects Different Mode<br/>e.g., Rotate & Flip]
+
+    SelectMode2 --> ProcessMode2[Process in Mode B<br/>Using previous output]
+
+    ProcessMode2 --> Complete2[Processing Complete<br/>Display new result]
+
+    Complete2 --> UserAction2{User Choice}
+
+    UserAction2 -->|Download| Download2([Download & End])
+    UserAction2 -->|Edit Again| EditAgain2[Click "Edit Again" Again]
+
+    EditAgain2 --> ConvertToFile
+
+    UserAction2 -->|Continue Chain| SelectMode3[Select Another Mode<br/>e.g., Enhancement]
+
+    SelectMode3 --> ProcessMode3[Process in Mode C<br/>Further refinement]
+
+    ProcessMode3 --> Complete3[Final Result]
+
+    Complete3 --> UserAction3{User Choice}
+
+    UserAction3 -->|Download| Download3([Download Final Result])
+    UserAction3 -->|Edit Again| EditAgain3[Continue Chaining...]
+
+    EditAgain3 --> ConvertToFile
+
+    Download1 --> End([End])
+    Download2 --> End
+    Download3 --> End
+
+    style Start fill:#90EE90
+    style EditAgain1 fill:#FFD700
+    style EditAgain2 fill:#FFD700
+    style EditAgain3 fill:#FFD700
+    style ConvertToFile fill:#87CEEB
+    style Download1 fill:#FFB6C1
+    style Download2 fill:#FFB6C1
+    style Download3 fill:#FFB6C1
+    style End fill:#FFB6C1
 ```
 
 ---
@@ -703,34 +940,43 @@ The application automatically compresses large images before upload to prevent p
 
 ### Large File Support by Processing Mode
 
-The application's 4 processing modes have varying levels of compression support:
+The application's 5 processing modes have varying levels of compression support:
 
 **Single Upload Compression** (via `useFileUpload` hook):
 - ✅ **AI Image Resizing**: Fully supported
 - ✅ **Manual Cropping**: Fully supported
-- ✅ **Upscaling**: Fully supported
 - ✅ **Image Compression**: Fully supported
+- ✅ **Image Enhancement**: Fully supported
+- ✅ **Rotate & Flip**: Fully supported
 
 **Batch Upload Compression** (via `batchUploadHelper`):
-- ❌ **AI Image Resizing**: Not yet implemented
-- ❌ **Manual Cropping**: Not yet implemented
-- ✅ **Upscaling**: Fully supported - `src/components/modes/Upscaling.tsx:190-198`
-- ✅ **Image Compression**: Fully supported - `src/components/modes/ImageCompression.tsx:156-164`
+- ❌ **AI Image Resizing**: UI restricted to single image only (code supports batch internally)
+- ❌ **Manual Cropping**: UI restricted to single image only (code supports batch internally)
+- ✅ **Image Compression**: Fully supported with batch compression
+- ✅ **Image Enhancement**: Fully supported with batch compression
+- ✅ **Rotate & Flip**: Fully supported with batch compression
 
 **Summary Table**:
 
-| Processing Mode | Single Upload | Batch Upload | Implementation Status |
-|----------------|--------------|--------------|----------------------|
-| **AI Image Resizing** | ✅ Compressed (>3MB) | ❌ Not implemented | Partial Support |
-| **Manual Cropping** | ✅ Compressed (>3MB) | ❌ Not implemented | Partial Support |
-| **Upscaling** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | **Full Support** |
-| **Image Compression** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | **Full Support** |
+| Processing Mode | Single Upload | Batch Upload | UI Availability | Implementation Status |
+|----------------|--------------|--------------|----------------|----------------------|
+| **AI Image Resizing** | ✅ Compressed (>3MB) | ⚠️ Code ready, UI restricted | Single only | UI Restriction |
+| **Manual Cropping** | ✅ Compressed (>3MB) | ⚠️ Code ready, UI restricted | Single only | UI Restriction |
+| **Image Compression** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | Single & Batch | **Full Support** |
+| **Image Enhancement** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | Single & Batch | **Full Support** |
+| **Rotate & Flip** | ✅ Compressed (>3MB) | ✅ Compressed (>3MB) | Single & Batch | **Full Support** |
+
+**UI Batch Mode Restrictions** (page.tsx:310):
+- When multiple files are uploaded, only modes in `batchCapableModes` array are shown
+- Current restriction: `['compression', 'enhancement', 'rotate-flip']`
+- AI Image Resizing and Manual Cropping have batch code but are excluded from UI
+- Message shown: "Generative Expand and Manual Cropping are only available for single images"
 
 **Implementation Details**:
 - Single uploads use compression automatically through the `useFileUpload` hook
-- Batch uploads in Upscaling and Image Compression modes use the `prepareFilesForBatchUpload()` helper
-- AI Image Resizing and Manual Cropping batch modes need `batchUploadHelper` integration
+- Batch uploads in Image Compression, Enhancement, and Rotate & Flip modes use the `prepareFilesForBatchUpload()` helper
 - All compression uses consistent settings: 3MB max, 4096px max dimension, 80% quality
+- Chain operations allow seamless processing across all 5 modes
 
 ```
 
@@ -805,19 +1051,21 @@ graph TB
         UploadAPI["Upload API<br/>/api/upload"]
         ProcessAPI["Process API<br/>/api/process"]
         CompressAPI["Compress API<br/>/api/compress"]
-        UpscaleAPI["Upscale API<br/>/api/upscale"]
         CompressImageAPI["Compress-Image API<br/>/api/compress-image"]
+        EnhanceAPI["Enhance API<br/>/api/enhance"]
+        RotateFlipAPI["Rotate-Flip API<br/>/api/rotate-flip"]
+        ConvertFormatAPI["Convert-Format API<br/>/api/convert-format"]
     end
 
-    subgraph Processing["Processing Layer (Sharp.js)"]
+    subgraph Processing["Processing Layer (Sharp.js + ONNX)"]
         ImageProcessor[Image Processor]
         SharpOps[Sharp Operations]
         FormatHandlers[Format Handlers]
+        ONNXModels[ONNX Enhancement Models]
     end
 
     subgraph External["External Services"]
         GeminiAI[Google Gemini AI]
-        CloudConvert[CloudConvert API]
     end
 
     subgraph Storage["Temporary Storage"]
@@ -837,28 +1085,32 @@ graph TB
     Controls --> RequestParser
     RequestParser --> ProcessAPI
     RequestParser --> CompressAPI
-    RequestParser --> UpscaleAPI
     RequestParser --> CompressImageAPI
+    RequestParser --> EnhanceAPI
+    RequestParser --> RotateFlipAPI
+    RequestParser --> ConvertFormatAPI
 
     ProcessAPI --> ImageProcessor
     ProcessAPI --> GeminiAI
     CompressAPI --> ImageProcessor
-    CompressAPI --> CloudConvert
-    UpscaleAPI --> ImageProcessor
     CompressImageAPI --> ImageProcessor
+    EnhanceAPI --> ONNXModels
+    RotateFlipAPI --> ImageProcessor
+    ConvertFormatAPI --> ImageProcessor
 
     ImageProcessor --> FormatHandlers
     FormatHandlers --> SharpOps
     SharpOps --> TempFiles
     TempFiles --> ImageProcessor
 
+    ONNXModels --> EnhanceAPI
     GeminiAI --> ProcessAPI
-    CloudConvert --> CompressAPI
 
     ProcessAPI --> Preview
     CompressAPI --> Preview
-    UpscaleAPI --> Preview
     CompressImageAPI --> Preview
+    EnhanceAPI --> Preview
+    RotateFlipAPI --> Preview
 
     style Frontend fill:#E1F5FF
     style API fill:#FFE1F5

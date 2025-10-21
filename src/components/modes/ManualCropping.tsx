@@ -9,13 +9,19 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { DimensionSelector } from '@/components/DimensionSelector';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { ImageDimensions } from '@/types';
-import { Download, RotateCcw, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle } from 'lucide-react';
+import { Download, RotateCcw, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
 import Image from 'next/image';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import JSZip from 'jszip';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
+import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
+import { CancelDialog } from '@/components/CancelDialog';
 
 interface ManualCroppingProps {
   onBack: () => void;
+  onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
+  preUploadedFiles?: File[];
 }
 
 interface CropFrame {
@@ -47,7 +53,7 @@ interface BatchCropItem {
   error?: string;
 }
 
-export function ManualCropping({}: ManualCroppingProps) {
+export function ManualCropping({ onEditAgain, preUploadedFiles }: ManualCroppingProps) {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchFiles, setBatchFiles] = useState<File[] | null>(null);
 
@@ -56,6 +62,18 @@ export function ManualCropping({}: ManualCroppingProps) {
     setBatchFiles(files);
     setIsBatchMode(true);
   };
+
+  // Auto-detect batch mode from pre-uploaded files
+  useEffect(() => {
+    if (preUploadedFiles && preUploadedFiles.length > 0) {
+      if (preUploadedFiles.length > 1) {
+        handleBatchModeActivation(preUploadedFiles);
+      } else {
+        // For single file, it will be handled by ManualCroppingContent
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Render batch mode if enabled
   if (isBatchMode && batchFiles) {
@@ -68,7 +86,10 @@ export function ManualCropping({}: ManualCroppingProps) {
     />;
   }
 
-  return <ManualCroppingContent setBatchFiles={handleBatchModeActivation} />;
+  return <ManualCroppingContent
+    setBatchFiles={handleBatchModeActivation}
+    preUploadedFile={preUploadedFiles && preUploadedFiles.length === 1 ? preUploadedFiles[0] : undefined}
+  />;
 }
 
 interface ManualCroppingBatchContentProps {
@@ -338,13 +359,28 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
 
   if (batchItems.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <header className="text-center mb-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="container mx-auto px-4 py-4"
+      >
+        <motion.header
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="text-center mb-4"
+        >
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-              <FileArchive className="w-6 h-6 text-green-600" />
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900">Batch Manual Cropping</h1>
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+              className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"
+            >
+              <FileArchive className="w-5 h-5 text-green-600" />
+            </motion.div>
+            <h1 className="text-3xl font-bold text-gray-900">Batch Manual Cropping</h1>
           </div>
           <p className="text-lg text-gray-600 mb-4">
             Upload multiple images and crop each one manually with precision control
@@ -365,30 +401,50 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
               </div>
             </div>
           </div>
-        </header>
-        <div className="max-w-2xl mx-auto">
+        </motion.header>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="max-w-2xl mx-auto"
+        >
           <ImageUploader
             onImageUpload={(file) => handleBatchImageUpload([file])}
             onBatchImageUpload={handleBatchImageUpload}
             isUploading={false}
             supportsBatch={true}
           />
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <header className="text-center mb-6">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="container mx-auto px-4 py-4"
+    >
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="text-center mb-6"
+      >
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Batch Manual Cropping</h1>
         <p className="text-sm text-gray-600">
           Select each image below to crop it manually • {completedCount} of {batchItems.length} completed
         </p>
-      </header>
+      </motion.header>
 
       {/* Instructions Banner */}
-      <div className="max-w-7xl mx-auto mb-6">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        className="max-w-7xl mx-auto mb-6"
+      >
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="pt-4">
             <div className="flex items-start gap-3">
@@ -399,11 +455,21 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
             </div>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.3 }}
+        className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6"
+      >
         {/* Image List */}
-        <div className="lg:col-span-1">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+          className="lg:col-span-1"
+        >
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -416,9 +482,14 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                {batchItems.map((item) => (
-                  <button
+                {batchItems.map((item, index) => (
+                  <motion.button
                     key={item.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => handleSelectImage(item.id)}
                     className={`w-full p-3 rounded-lg border-2 transition-all ${
                       selectedImageId === item.id
@@ -446,7 +517,7 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
 
@@ -461,12 +532,25 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
               )}
             </CardContent>
           </Card>
-        </div>
+        </motion.div>
 
         {/* Crop Editor */}
-        <div className="lg:col-span-2">
-          {selectedItem ? (
-            <div className="space-y-4">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="lg:col-span-2"
+        >
+          <AnimatePresence mode="wait">
+            {selectedItem ? (
+              <motion.div
+                key={selectedImageId}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-2"
+              >
               <Card>
                 <CardHeader>
                   <CardTitle>Crop: {selectedItem.filename}</CardTitle>
@@ -538,28 +622,36 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
                   </CardContent>
                 </Card>
               </div>
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="py-20 text-center">
-                <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">Select an image from the list to start cropping</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card>
+                  <CardContent className="py-20 text-center">
+                    <Scissors className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">Select an image from the list to start cropping</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
 
       <canvas ref={canvasRef} className="hidden" />
-    </div>
+    </motion.div>
   );
 }
 
 interface ManualCroppingContentProps {
   setBatchFiles: (files: File[]) => void;
+  preUploadedFile?: File;
 }
 
-function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
+function ManualCroppingContent({ setBatchFiles, preUploadedFile }: ManualCroppingContentProps) {
   const [targetDimensions, setTargetDimensions] = useState<ImageDimensions>({
     width: 1080,
     height: 1920,
@@ -589,6 +681,10 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
   const [croppedImageUrl, setCroppedImageUrl] = useState<string | null>(null);
   const [isImageHovered, setIsImageHovered] = useState(false);
   const [isDimensionSelected, setIsDimensionSelected] = useState(false);
+  const [showFormatDialog, setShowFormatDialog] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [croppedImageData, setCroppedImageData] = useState<string | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -597,9 +693,18 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
     isUploading,
     uploadedImage,
     error: uploadError,
+    validationError,
     uploadFile,
     reset: resetUpload,
   } = useFileUpload();
+
+  // Auto-upload pre-uploaded file
+  useEffect(() => {
+    if (preUploadedFile && !uploadedImage) {
+      uploadFile(preUploadedFile);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleImageUpload = (file: File) => {
     uploadFile(file);
@@ -859,14 +964,29 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
                 );
                 const url = URL.createObjectURL(compressedBlob);
                 setCroppedImageUrl(url);
+                setCroppedImageData(result.data.imageData);
               } else {
                 const url = URL.createObjectURL(blob);
                 setCroppedImageUrl(url);
+                // Convert blob to base64 for fallback
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64 = (reader.result as string).split(',')[1];
+                  setCroppedImageData(base64);
+                };
+                reader.readAsDataURL(blob);
               }
             } catch (compressionError) {
               console.warn('Compression failed, using original:', compressionError);
               const url = URL.createObjectURL(blob);
               setCroppedImageUrl(url);
+              // Convert blob to base64 for fallback
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = (reader.result as string).split(',')[1];
+                setCroppedImageData(base64);
+              };
+              reader.readAsDataURL(blob);
             }
           }
           setIsProcessing(false);
@@ -1132,47 +1252,140 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
   };
 
   const handleDownload = () => {
-    if (!croppedImageUrl) return;
+    if (!croppedImageUrl || !croppedImageData) return;
+    setShowFormatDialog(true);
+  };
 
-    const link = document.createElement('a');
-    link.download = `cropped-${uploadedImage?.filename || 'image'}.jpg`;
-    link.href = croppedImageUrl;
-    link.click();
+  const handleFormatDownload = async (format: ImageFormat, quality: number) => {
+    if (!croppedImageData || !uploadedImage) return;
+
+    setIsConverting(true);
+    try {
+      // Check if format is JPEG (current format)
+      if (format === 'jpeg') {
+        // Direct download if same format
+        const link = document.createElement('a');
+        link.href = `data:image/jpeg;base64,${croppedImageData}`;
+        link.download = `cropped-${uploadedImage.filename}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setIsConverting(false);
+        return;
+      }
+
+      // Convert to different format via API
+      const response = await fetch('/api/convert-format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData: croppedImageData,
+          targetFormat: format,
+          quality: quality,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Format conversion failed');
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Format conversion failed');
+      }
+
+      // Download converted image
+      const link = document.createElement('a');
+      const mimeType = format === 'svg' ? 'image/svg+xml' : `image/${format}`;
+      link.href = `data:${mimeType};base64,${result.data.imageData}`;
+      link.download = `cropped-${uploadedImage.filename}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert(error instanceof Error ? error.message : 'Download failed');
+    } finally {
+      setIsConverting(false);
+    }
   };
 
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <header className="text-center mb-8">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="container mx-auto px-4 py-4"
+    >
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="text-center mb-4"
+      >
         <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-            <Scissors className="w-6 h-6 text-green-600" />
-          </div>
-          <h1 className="text-4xl font-bold text-gray-900">
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+            className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center"
+          >
+            <Scissors className="w-5 h-5 text-green-600" />
+          </motion.div>
+          <h1 className="text-3xl font-bold text-gray-900">
             Manual Cropping
           </h1>
         </div>
-        <p className="text-lg text-gray-600">
+        <p className="text-sm text-gray-600">
           Precise manual control with drag-and-zoom functionality for perfect cropping
         </p>
-      </header>
+      </motion.header>
 
       <div className="px-2">
-        {!uploadedImage ? (
-          <div className="max-w-2xl mx-auto space-y-4">
-            <ImageUploader
-              onImageUpload={handleImageUpload}
-              onBatchImageUpload={handleBatchImageUpload}
-              isUploading={isUploading}
-              supportsBatch={true}
-            />
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {/* Main Cropping Interface */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              {/* Crop Preview - Main Focus */}
-              <div className="xl:col-span-2 space-y-6">
+        <AnimatePresence mode="wait">
+          {!uploadedImage ? (
+            <motion.div
+              key="uploader"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              className="max-w-2xl mx-auto space-y-4"
+            >
+            {validationError.type ? (
+              <UnsupportedFormatError
+                filename={validationError.filename || ''}
+                onRetry={resetUpload}
+              />
+            ) : (
+              <ImageUploader
+                onImageUpload={handleImageUpload}
+                onBatchImageUpload={handleBatchImageUpload}
+                isUploading={isUploading}
+                supportsBatch={true}
+              />
+            )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="cropping"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-8"
+            >
+              {/* Main Cropping Interface */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                {/* Crop Preview - Main Focus */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: 0.2 }}
+                  className="xl:col-span-2 space-y-6"
+                >
                 <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
@@ -1340,118 +1553,223 @@ function ManualCroppingContent({ setBatchFiles }: ManualCroppingContentProps) {
 
                   </CardContent>
                 </Card>
-              </div>
+                </motion.div>
 
-              {/* Controls Sidebar */}
-              <div className="space-y-6">
+                {/* Controls Sidebar */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: 0.3 }}
+                  className="space-y-3"
+                >
                 {/* Image Info */}
-                <Card className="border-0 shadow-lg">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">Image Info</CardTitle>
-                      <Button variant="outline" size="sm" onClick={handleReset} className="h-8">
-                        <RotateCcw className="h-3 w-3 mr-1" />
-                        Reset
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">{uploadedImage.filename}</div>
-                      <div className="text-xs text-slate-500">
-                        {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.4 }}
+                >
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">Image Info</CardTitle>
+                        <Button variant="outline" size="sm" onClick={handleReset} className="h-8">
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          Reset
+                        </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <div className="text-sm font-medium text-slate-900 break-all">{uploadedImage.filename}</div>
+                        <div className="text-xs text-slate-500">
+                          {uploadedImage.originalDimensions.width} × {uploadedImage.originalDimensions.height}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
                 {/* Dimensions */}
-                <DimensionSelector
-                  originalDimensions={uploadedImage.originalDimensions}
-                  targetDimensions={targetDimensions}
-                  onDimensionsChange={handleDimensionsChange}
-                  showAIMessage={false}
-                />
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.5 }}
+                >
+                  <DimensionSelector
+                    originalDimensions={uploadedImage.originalDimensions}
+                    targetDimensions={targetDimensions}
+                    onDimensionsChange={handleDimensionsChange}
+                    showAIMessage={false}
+                  />
+                </motion.div>
 
                 {/* Keyboard Shortcuts */}
-                <Card className="border-0 shadow-lg">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Keyboard className="w-4 h-4" />
-                      Keyboard Shortcuts
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="text-xs space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Move Frame</span>
-                        <kbd className="px-2 py-1 bg-slate-100 rounded text-slate-800">↑↓←→</kbd>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.6 }}
+                >
+                  <Card className="border-0 shadow-lg">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Keyboard className="w-4 h-4" />
+                        Keyboard Shortcuts
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Move Frame</span>
+                          <kbd className="px-2 py-1 bg-slate-100 rounded text-slate-800">↑↓←→</kbd>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Crop</span>
+                          <kbd className="px-2 py-1 bg-slate-100 rounded text-slate-800">Space</kbd>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Reset</span>
+                          <kbd className="px-2 py-1 bg-slate-100 rounded text-slate-800">Ctrl+R</kbd>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Crop</span>
-                        <kbd className="px-2 py-1 bg-slate-100 rounded text-slate-800">Space</kbd>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Reset</span>
-                        <kbd className="px-2 py-1 bg-slate-100 rounded text-slate-800">Ctrl+R</kbd>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
                 {/* Action Buttons */}
-                <div className="space-y-3">
-                  <Button
-                    onClick={handleCrop}
-                    disabled={isProcessing}
-                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Scissors className="h-4 w-4 mr-2" />
-                        Crop Image
-                      </>
-                    )}
-                  </Button>
-
-                  {croppedImageUrl && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.7 }}
+                  className="space-y-3"
+                >
+                  {isProcessing ? (
                     <Button
+                      onClick={() => setShowCancelDialog(true)}
                       variant="outline"
-                      onClick={handleDownload}
-                      className="w-full h-12 border-2 hover:bg-slate-50 font-medium rounded-lg transition-all duration-200"
+                      className="w-full h-12 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 font-medium rounded-lg transition-all duration-200"
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Cropped Image
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel Processing
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleCrop}
+                      disabled={!!croppedImageUrl}
+                      className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
+                    >
+                      {croppedImageUrl ? (
+                        <>Cropped ✓</>
+                      ) : (
+                        <>
+                          <Scissors className="h-4 w-4 mr-2" />
+                          Crop Image
+                        </>
+                      )}
                     </Button>
                   )}
-                </div>
+
+                  <AnimatePresence>
+                    {croppedImageUrl && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-2"
+                      >
+                        <Button
+                          variant="outline"
+                          onClick={handleDownload}
+                          className="w-full h-12 border-2 hover:bg-slate-50 font-medium rounded-lg transition-all duration-200"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Cropped Image
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            if (onEditAgain && croppedImageData && uploadedImage) {
+                              // Pass the cropped image to edit again with a different mode
+                              const mimeType = uploadedImage.mimetype || 'image/jpeg';
+                              onEditAgain(croppedImageData, {
+                                filename: uploadedImage.filename,
+                                mimetype: mimeType
+                              });
+                            } else {
+                              // Fallback to reset
+                              setCroppedImageUrl(null);
+                              setCroppedImageData(null);
+                              resetUpload();
+                            }
+                          }}
+                          variant="outline"
+                          className="w-full h-12 border-blue-300 text-blue-600 hover:bg-blue-50 font-medium rounded-lg transition-all duration-200"
+                        >
+                          <Edit2 className="h-4 w-4 mr-2" />
+                          Edit Again
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+                </motion.div>
               </div>
-            </div>
 
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {uploadError && (
-          <div className="max-w-2xl mx-auto">
+        <AnimatePresence>
+          {uploadError && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="max-w-2xl mx-auto"
+            >
             <Card className="border-red-200 bg-red-50">
               <CardContent className="pt-6">
                 <p className="text-red-600 text-sm">{uploadError}</p>
               </CardContent>
             </Card>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
 
-      <footer className="text-center mt-12 text-gray-500 text-sm">
+      {croppedImageData && uploadedImage && (
+        <FormatDownloadDialog
+          isOpen={showFormatDialog}
+          onClose={() => setShowFormatDialog(false)}
+          onDownload={handleFormatDownload}
+          currentFormat="jpeg"
+          imageData={`data:image/jpeg;base64,${croppedImageData}`}
+          filename={uploadedImage.filename}
+        />
+      )}
+
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.6 }}
+        className="text-center mt-4 text-gray-500 text-xs"
+      >
         <p>No file size limits • Supports JPEG, PNG, WebP and SVG</p>
-      </footer>
-    </div>
+      </motion.footer>
+
+      {/* Cancel Dialog */}
+      <CancelDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={() => {
+          setShowCancelDialog(false);
+          setIsProcessing(false);
+        }}
+        title="Cancel Cropping?"
+        description="Are you sure you want to cancel the manual crop? Any progress will be lost."
+      />
+    </motion.div>
   );
 }

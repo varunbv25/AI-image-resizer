@@ -11,7 +11,7 @@ export interface AspectRatio {
 }
 
 export interface ProcessingStatus {
-  stage: 'idle' | 'uploading' | 'analyzing' | 'extending' | 'optimizing' | 'completed' | 'error';
+  stage: 'idle' | 'uploading' | 'analyzing' | 'extending' | 'enhancing' | 'optimizing' | 'completed' | 'error' | 'finalizing';
   progress: number;
   message: string;
 }
@@ -48,4 +48,22 @@ export interface UploadedFile {
   mimetype: string;
   buffer: Buffer;
   size: number;
+}
+
+export interface RotateFlipSettings {
+  operation: 'rotate-90' | 'rotate-180' | 'rotate-270' | 'flip-horizontal' | 'flip-vertical' | 'custom';
+  customAngle?: number;
+  quality: number;
+}
+
+export interface FilterSettings {
+  filterType: 'grayscale' | 'sepia' | 'noir' | 'warm' | 'cool' | 'vibrant' | 'dramatic' | 'soft-focus';
+  intensity: number; // 0-100
+  quality: number;
+}
+
+export interface FormatConversionSettings {
+  targetFormat: 'jpeg' | 'png' | 'webp' | 'svg';
+  quality: number;
+  originalFormat?: string;
 }

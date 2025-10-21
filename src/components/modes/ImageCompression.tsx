@@ -9,13 +9,19 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle } from 'lucide-react';
+import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
+import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
+import { CancelDialog } from '@/components/CancelDialog';
 
 interface ImageCompressionProps {
   onBack: () => void;
+  onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
+  preUploadedFiles?: File[];
 }
 
 interface CompressionSettings {
@@ -25,7 +31,7 @@ interface CompressionSettings {
   maxFileSizeKB: number;
 }
 
-export function ImageCompression({}: ImageCompressionProps) {
+export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompressionProps) {
   const [compressionMode, setCompressionMode] = useState<'quality' | 'filesize'>('quality');
   const [quality, setQuality] = useState<number>(80); // quality percentage (0-100)
   const [maxFileSize, setMaxFileSize] = useState<number>(40); // percentage of original
@@ -41,6 +47,7 @@ export function ImageCompression({}: ImageCompressionProps) {
   const [comparisonPosition, setComparisonPosition] = useState<number>(50);
   const [isComparing, setIsComparing] = useState(false);
   const [imageBounds, setImageBounds] = useState<{ left: number; right: number } | null>(null);
+  const [batchComparisonBounds, setBatchComparisonBounds] = useState<{ left: number; right: number } | null>(null);
 
   // Batch processing state
   const [isBatchMode, setIsBatchMode] = useState(false);
@@ -49,17 +56,39 @@ export function ImageCompression({}: ImageCompressionProps) {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [batchProcessingStarted, setBatchProcessingStarted] = useState(false);
 
+  // Format selection state
+  const [showFormatDialog, setShowFormatDialog] = useState(false);
+  const [selectedDownloadId, setSelectedDownloadId] = useState<string | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
   const sliderRef = useRef<HTMLDivElement>(null);
   const comparisonRef = useRef<HTMLDivElement>(null);
   const originalImageRef = useRef<HTMLImageElement>(null);
+  const batchComparisonRef = useRef<HTMLDivElement>(null);
 
   const {
     isUploading,
     uploadedImage,
     error: uploadError,
+    validationError,
     uploadFile,
     reset: resetUpload,
   } = useFileUpload();
+
+  // Auto-load pre-uploaded files
+  useEffect(() => {
+    if (preUploadedFiles && preUploadedFiles.length > 0) {
+      if (preUploadedFiles.length > 1) {
+        handleBatchImageUpload(preUploadedFiles);
+      } else {
+        uploadFile(preUploadedFiles[0]);
+        setCompressedImage(null);
+        setCompressionError('');
+        setIsBatchMode(false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleImageUpload = (file: File) => {
     uploadFile(file);
@@ -355,6 +384,76 @@ export function ImageCompression({}: ImageCompressionProps) {
     return Math.max(imageBounds.left, Math.min(imageBounds.right, percentage));
   };
 
+  // Helper function to constrain position within batch comparison bounds
+  const constrainBatchPosition = (percentage: number): number => {
+    if (!batchComparisonBounds) return percentage;
+    return Math.max(batchComparisonBounds.left, Math.min(batchComparisonBounds.right, percentage));
+  };
+
+  // Calculate batch comparison image bounds when selected item changes
+  useEffect(() => {
+    const selectedItem = batchItems.find(item => item.id === selectedImageId);
+    if (!selectedItem || !selectedItem.processedData || !batchComparisonRef.current || !selectedItem.originalDimensions) {
+      setBatchComparisonBounds(null);
+      return;
+    }
+
+    const calculateBounds = () => {
+      const container = batchComparisonRef.current;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const containerHeight = containerRect.height;
+
+      // Get image dimensions
+      const imgWidth = selectedItem.originalDimensions?.width || 0;
+      const imgHeight = selectedItem.originalDimensions?.height || 0;
+
+      // Calculate aspect ratios
+      const containerAspect = containerWidth / containerHeight;
+      const imageAspect = imgWidth / imgHeight;
+
+      let leftPercent = 0;
+      let rightPercent = 100;
+
+      // Image is wider than container (letterboxing on sides)
+      if (imageAspect > containerAspect) {
+        // Image fills width, has empty space on top/bottom
+        leftPercent = 0;
+        rightPercent = 100;
+      } else {
+        // Image fills height, has empty space on left/right
+        const renderedWidth = containerHeight * imageAspect;
+        const emptySpace = (containerWidth - renderedWidth) / 2;
+        leftPercent = (emptySpace / containerWidth) * 100;
+        rightPercent = ((containerWidth - emptySpace) / containerWidth) * 100;
+      }
+
+      const bounds = {
+        left: leftPercent,
+        right: rightPercent
+      };
+
+      setBatchComparisonBounds(bounds);
+
+      // Set initial comparison position to middle of image bounds
+      const middlePosition = (bounds.left + bounds.right) / 2;
+      setComparisonPosition(middlePosition);
+    };
+
+    // Use timeout to ensure images are rendered
+    const timeoutId = setTimeout(calculateBounds, 150);
+
+    // Recalculate on window resize
+    window.addEventListener('resize', calculateBounds);
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', calculateBounds);
+    };
+  }, [selectedImageId, batchItems]);
+
   const updateImageSettings = (id: string, newSettings: Partial<CompressionSettings>) => {
     setBatchItems(prev => prev.map(item => {
       if (item.id === id) {
@@ -419,13 +518,61 @@ export function ImageCompression({}: ImageCompressionProps) {
 
   const handleDownload = () => {
     if (!compressedImage) return;
+    setShowFormatDialog(true);
+  };
 
-    const link = document.createElement('a');
-    link.href = compressedImage.imageData;
-    link.download = `compressed-${uploadedImage?.filename || 'image.jpg'}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleFormatDownload = async (format: ImageFormat, quality: number) => {
+    if (!compressedImage || !uploadedImage) return;
+
+    try {
+      // Extract base64 data from data URL
+      const base64Data = compressedImage.imageData.split(',')[1];
+
+      // Check if format is JPEG (current format from compression)
+      if (format === 'jpeg') {
+        // Direct download if same format
+        const link = document.createElement('a');
+        link.href = compressedImage.imageData;
+        link.download = `compressed-${uploadedImage.filename}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Convert to different format via API
+      const response = await fetch('/api/convert-format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData: base64Data,
+          targetFormat: format,
+          quality: quality,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Format conversion failed');
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Format conversion failed');
+      }
+
+      // Download converted image
+      const link = document.createElement('a');
+      const mimeType = format === 'svg' ? 'image/svg+xml' : `image/${format}`;
+      link.href = `data:${mimeType};base64,${result.data.imageData}`;
+      link.download = `compressed-${uploadedImage.filename}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert(error instanceof Error ? error.message : 'Download failed');
+    }
   };
 
   const handleReset = () => {
@@ -466,15 +613,65 @@ export function ImageCompression({}: ImageCompressionProps) {
   };
 
   const handleDownloadSingle = (id: string) => {
-    const item = batchItems.find(item => item.id === id);
+    setSelectedDownloadId(id);
+    setShowFormatDialog(true);
+  };
+
+  const handleBatchFormatDownload = async (format: ImageFormat, quality: number) => {
+    if (!selectedDownloadId) return;
+
+    const item = batchItems.find(item => item.id === selectedDownloadId);
     if (!item || !item.processedData) return;
 
-    const link = document.createElement('a');
-    link.href = item.processedData;
-    link.download = `compressed-${item.filename}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Extract base64 data from data URL
+      const base64Data = item.processedData.split(',')[1];
+
+      // Check if format is JPEG (current format from compression)
+      if (format === 'jpeg') {
+        // Direct download if same format
+        const link = document.createElement('a');
+        link.href = item.processedData;
+        link.download = `compressed-${item.filename}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      // Convert to different format via API
+      const response = await fetch('/api/convert-format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData: base64Data,
+          targetFormat: format,
+          quality: quality,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Format conversion failed');
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Format conversion failed');
+      }
+
+      // Download converted image
+      const link = document.createElement('a');
+      const mimeType = format === 'svg' ? 'image/svg+xml' : `image/${format}`;
+      link.href = `data:${mimeType};base64,${result.data.imageData}`;
+      link.download = `compressed-${item.filename}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert(error instanceof Error ? error.message : 'Download failed');
+    }
   };
 
   useEffect(() => {
@@ -507,39 +704,85 @@ export function ImageCompression({}: ImageCompressionProps) {
   }, [isSliderHovered, quality, maxFileSizeKB, compressionMode, uploadedImage]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <header className="text-center mb-8">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="container mx-auto px-4 py-4"
+    >
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="text-center mb-4"
+      >
         <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-            <FileArchive className="w-6 h-6 text-orange-600" />
-          </div>
-          <h1 className="text-4xl font-bold text-gray-900">
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+            className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center"
+          >
+            <FileArchive className="w-5 h-5 text-orange-600" />
+          </motion.div>
+          <h1 className="text-3xl font-bold text-gray-900">
             Compression
           </h1>
         </div>
-        <p className="text-lg text-gray-600">
+        <p className="text-sm text-gray-600">
           Reduce file size while maintaining image quality
         </p>
-      </header>
+      </motion.header>
 
-      {!uploadedImage && !isBatchMode ? (
-        <div className="max-w-2xl mx-auto">
-          <ImageUploader
-            onImageUpload={handleImageUpload}
-            onBatchImageUpload={handleBatchImageUpload}
-            isUploading={isUploading}
-            supportsBatch={true}
-          />
-        </div>
-      ) : isBatchMode ? (
-        <div className="max-w-7xl mx-auto space-y-6">
+      <AnimatePresence mode="wait">
+        {!uploadedImage && !isBatchMode ? (
+          <motion.div
+            key="uploader"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-2xl mx-auto space-y-4"
+          >
+            {validationError.type ? (
+              <UnsupportedFormatError
+                filename={validationError.filename || ''}
+                onRetry={resetUpload}
+              />
+            ) : (
+              <ImageUploader
+                onImageUpload={handleImageUpload}
+                onBatchImageUpload={handleBatchImageUpload}
+                isUploading={isUploading}
+                supportsBatch={true}
+              />
+            )}
+          </motion.div>
+        ) : isBatchMode ? (
+        <motion.div
+          key="batch"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.4 }}
+          className="max-w-7xl mx-auto space-y-6"
+        >
           {/* Default Compression Settings - Show when no image is selected */}
-          {!batchProcessingStarted && !selectedImageId && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Default Compression Settings (applies to all images)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
+          <AnimatePresence>
+            {!batchProcessingStarted && !selectedImageId && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      Default Compression Settings (applies to all images)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
                 {/* Mode Toggle */}
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-gray-700">
@@ -613,24 +856,50 @@ export function ImageCompression({}: ImageCompressionProps) {
                 )}
               </CardContent>
             </Card>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Instructions Banner */}
-          <Card className="bg-blue-50 border-blue-200">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <Card className="bg-blue-50 border-blue-200">
             <CardContent className="pt-4">
               <div className="flex items-start gap-3">
                 <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-blue-900">
-                  <strong>How to use:</strong> Click any image below to customize its compression settings, then click &quot;Compress This Image&quot;. Or click &quot;Compress All Images&quot; to use default settings for all pending images.
+                  {selectedImageId ? (
+                    <>
+                      <strong>Individual Processing:</strong> Customize compression settings for the selected image, then click &quot;Compress This Image&quot;. Repeat for each image or click &quot;Compress All Images&quot; to use default settings for remaining images.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Batch Processing:</strong> Click &quot;Compress All Images&quot; to use default settings for all images, or click any image to customize its settings individually. All processed images will be available for download as a single ZIP file.
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
+          </motion.div>
 
           {/* Grid Layout: Sidebar and Main Content */}
-          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6"
+          >
             {/* Sidebar - Image List */}
-            <div className="lg:col-span-1">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.4 }}
+              className="lg:col-span-1"
+            >
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
@@ -643,11 +912,16 @@ export function ImageCompression({}: ImageCompressionProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                    {batchItems.map((item) => (
-                      <button
+                    {batchItems.map((item, index) => (
+                      <motion.button
                         key={item.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={() => setSelectedImageId(item.id)}
-                        className={`w-full p-3 rounded-lg border-2 transition-all ${
+                        className={`w-full p-3 rounded-lg border-2 transition-all cursor-pointer ${
                           selectedImageId === item.id
                             ? 'border-orange-500 bg-orange-50'
                             : 'border-gray-200 hover:border-gray-300'
@@ -660,10 +934,22 @@ export function ImageCompression({}: ImageCompressionProps) {
                             className="w-16 h-16 object-cover rounded"
                           />
                           <div className="flex-1 text-left">
-                            <p className="text-sm font-medium text-gray-900 truncate">{item.filename}</p>
+                            <p className="text-sm font-medium text-gray-900 break-all">{item.filename}</p>
                             <p className="text-xs text-gray-500">
-                              {item.originalDimensions?.width} × {item.originalDimensions?.height} • {Math.round(item.originalSize / 1024)} KB
+                              {item.originalDimensions?.width} × {item.originalDimensions?.height}
                             </p>
+                            {item.status === 'completed' && item.processedSize ? (
+                              <p className="text-xs text-gray-600">
+                                {Math.round(item.originalSize / 1024)} KB → {Math.round(item.processedSize / 1024)} KB
+                                <span className="text-green-600 ml-1">
+                                  (-{Math.round((1 - item.processedSize / item.originalSize) * 100)}%)
+                                </span>
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-500">
+                                {Math.round(item.originalSize / 1024)} KB
+                              </p>
+                            )}
                             <div className="flex items-center gap-1 mt-1">
                               {item.status === 'pending' && <Clock className="w-3 h-3 text-gray-400" />}
                               {item.status === 'processing' && (
@@ -675,49 +961,80 @@ export function ImageCompression({}: ImageCompressionProps) {
                             </div>
                           </div>
                         </div>
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
 
                   <div className="mt-4 space-y-2">
-                    {!batchProcessingStarted && batchItems.some(i => i.status === 'pending') && (
-                      <Button
-                        onClick={processAllImages}
-                        className="w-full bg-orange-600 hover:bg-orange-700"
-                      >
-                        <FileArchive className="h-4 w-4 mr-2" />
-                        Compress All Images ({batchItems.filter(i => i.status === 'pending').length})
-                      </Button>
-                    )}
-                    {batchItems.some(i => i.status === 'completed') && (
-                      <Button
-                        onClick={handleDownloadAll}
-                        className="w-full bg-green-600 hover:bg-green-700"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Download All ({batchItems.filter(i => i.status === 'completed').length})
-                      </Button>
-                    )}
+                    <AnimatePresence>
+                      {!batchProcessingStarted && batchItems.some(i => i.status === 'pending') && (
+                        <motion.div
+                          key="compress-all-button"
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <Button
+                            onClick={processAllImages}
+                            className="w-full bg-orange-600 hover:bg-orange-700"
+                          >
+                            <FileArchive className="h-4 w-4 mr-2" />
+                            Compress All Images ({batchItems.filter(i => i.status === 'pending').length})
+                          </Button>
+                        </motion.div>
+                      )}
+                      {batchItems.some(i => i.status === 'completed') && (
+                        <motion.div
+                          key="download-all-button"
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <Button
+                            onClick={handleDownloadAll}
+                            className="w-full bg-green-600 hover:bg-green-700"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download All ({batchItems.filter(i => i.status === 'completed').length})
+                          </Button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </motion.div>
 
-            {/* Main Content - Selected Image Settings */}
-            <div className="lg:col-span-2">
-              {selectedImageId && (() => {
-                const selectedItem = batchItems.find(item => item.id === selectedImageId);
-                if (!selectedItem || !selectedItem.settings) return null;
+            {/* Main Content - Selected Image Settings (only in individual mode) */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.5 }}
+              className="lg:col-span-2"
+            >
+              <AnimatePresence mode="wait">
+                {selectedImageId && (() => {
+                  const selectedItem = batchItems.find(item => item.id === selectedImageId);
+                  if (!selectedItem || !selectedItem.settings) return null;
 
-                const itemSettings = selectedItem.settings as unknown as CompressionSettings;
+                  const itemSettings = selectedItem.settings as unknown as CompressionSettings;
 
-              return (
-                <div className="space-y-4">
+                return (
+                  <motion.div
+                    key={selectedImageId}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-2"
+                  >
                   {/* Image Preview Card */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between">
-                        <span className="truncate">{selectedItem.filename}</span>
+                        <span className="break-all">{selectedItem.filename}</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -728,17 +1045,128 @@ export function ImageCompression({}: ImageCompressionProps) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-2">
-                        <img
-                          src={selectedItem.previewUrl}
-                          alt={selectedItem.filename}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {selectedItem.originalDimensions?.width} × {selectedItem.originalDimensions?.height} •{' '}
-                        {Math.round(selectedItem.originalSize / 1024)} KB
-                      </p>
+                      {selectedItem.status === 'completed' && selectedItem.processedData ? (
+                        <>
+                          {/* Comparison View */}
+                          <div
+                            ref={batchComparisonRef}
+                            className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden mb-2 select-none"
+                            onMouseDown={(e) => {
+                              setIsComparing(true);
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              const percentage = (x / rect.width) * 100;
+                              setComparisonPosition(constrainBatchPosition(percentage));
+                            }}
+                            onMouseMove={(e) => {
+                              if (!isComparing) return;
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              const percentage = (x / rect.width) * 100;
+                              setComparisonPosition(constrainBatchPosition(percentage));
+                            }}
+                            onMouseUp={() => setIsComparing(false)}
+                            onMouseLeave={() => setIsComparing(false)}
+                            onTouchStart={(e) => {
+                              setIsComparing(true);
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.touches[0].clientX - rect.left;
+                              const percentage = (x / rect.width) * 100;
+                              setComparisonPosition(constrainBatchPosition(percentage));
+                            }}
+                            onTouchMove={(e) => {
+                              if (!isComparing) return;
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.touches[0].clientX - rect.left;
+                              const percentage = (x / rect.width) * 100;
+                              setComparisonPosition(constrainBatchPosition(percentage));
+                            }}
+                            onTouchEnd={() => setIsComparing(false)}
+                          >
+                            {/* Compressed Image (base layer) */}
+                            <img
+                              src={selectedItem.processedData}
+                              alt="Compressed"
+                              className="absolute inset-0 w-full h-full object-contain"
+                            />
+
+                            {/* Original Image (clipped layer) */}
+                            <div
+                              className="absolute inset-0"
+                              style={{
+                                clipPath: `inset(0 ${100 - comparisonPosition}% 0 0)`
+                              }}
+                            >
+                              <img
+                                src={selectedItem.previewUrl}
+                                alt="Original"
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+
+                            {/* Comparison Slider */}
+                            <>
+                              {/* Slider Line */}
+                              <div
+                                className="absolute top-0 bottom-0 w-1 bg-white shadow-lg cursor-ew-resize z-10"
+                                style={{ left: `${comparisonPosition}%` }}
+                              >
+                                {/* Slider Handle */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300">
+                                  <div className="flex gap-0.5">
+                                    <div className="w-0.5 h-4 bg-gray-400"></div>
+                                    <div className="w-0.5 h-4 bg-gray-400"></div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Labels */}
+                              <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                                Original: {Math.round(selectedItem.originalSize / 1024)} KB
+                              </div>
+                              <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                                Compressed: {Math.round((selectedItem.processedSize || 0) / 1024)} KB (-{Math.round((1 - (selectedItem.processedSize || 0) / selectedItem.originalSize) * 100)}%)
+                              </div>
+                            </>
+                          </div>
+
+                          {/* File Size Stats */}
+                          <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-gray-600">Original:</span>
+                              <span className="font-semibold">
+                                {Math.round(selectedItem.originalSize / 1024)} KB
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-gray-600">Compressed:</span>
+                              <span className="font-semibold text-orange-600">
+                                {Math.round((selectedItem.processedSize || 0) / 1024)} KB (-{Math.round((1 - (selectedItem.processedSize || 0) / selectedItem.originalSize) * 100)}%)
+                              </span>
+                            </div>
+                            <div className="pt-2 border-t border-gray-200">
+                              <p className="text-sm font-semibold text-center text-green-600">
+                                {Math.round((1 - (selectedItem.processedSize || 0) / selectedItem.originalSize) * 100)}% size reduction
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Original Image Preview */}
+                          <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-2">
+                            <img
+                              src={selectedItem.previewUrl}
+                              alt={selectedItem.filename}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {selectedItem.originalDimensions?.width} × {selectedItem.originalDimensions?.height} •{' '}
+                            {Math.round(selectedItem.originalSize / 1024)} KB
+                          </p>
+                        </>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -747,7 +1175,7 @@ export function ImageCompression({}: ImageCompressionProps) {
                     <CardHeader>
                       <CardTitle>Individual Compression Settings</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                    <CardContent className="space-y-3">
                       {/* Mode Toggle */}
                       <div className="space-y-3">
                         <label className="text-sm font-medium text-gray-700">
@@ -826,48 +1254,94 @@ export function ImageCompression({}: ImageCompressionProps) {
                       )}
 
                       {/* Process This Image Button */}
-                      {selectedItem.status === 'pending' && (
-                        <Button
-                          onClick={() => processSingleImage(selectedImageId)}
-                          className="w-full bg-orange-600 hover:bg-orange-700"
-                        >
-                          Compress This Image
-                        </Button>
-                      )}
-                      {selectedItem.status === 'completed' && selectedItem.processedData && (
-                        <Button
-                          onClick={() => handleDownloadSingle(selectedImageId)}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
-                      )}
-                      {selectedItem.status === 'error' && (
-                        <div className="bg-red-50 border border-red-200 rounded p-2">
-                          <p className="text-xs text-red-600">{selectedItem.error}</p>
-                        </div>
-                      )}
+                      <AnimatePresence>
+                        {selectedItem.status === 'pending' && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <Button
+                              onClick={() => processSingleImage(selectedImageId)}
+                              className="w-full bg-orange-600 hover:bg-orange-700"
+                            >
+                              Compress This Image
+                            </Button>
+                          </motion.div>
+                        )}
+                        {selectedItem.status === 'completed' && selectedItem.processedData && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <Button
+                              onClick={() => handleDownloadSingle(selectedImageId)}
+                              variant="outline"
+                              className="w-full"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Download
+                            </Button>
+                          </motion.div>
+                        )}
+                        {selectedItem.status === 'error' && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            transition={{ duration: 0.2 }}
+                            className="bg-red-50 border border-red-200 rounded p-2"
+                          >
+                            <p className="text-xs text-red-600">{selectedItem.error}</p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </CardContent>
                   </Card>
-                </div>
+                </motion.div>
               );
-              })() || (
-                <Card>
-                  <CardContent className="py-20 text-center">
-                    <FileArchive className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Select an image from the list to configure and compress it</p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </div>
+                })() || (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Card>
+                      <CardContent className="py-20 text-center">
+                        <FileArchive className="w-16 h-16 text-orange-400 mx-auto mb-4" />
+                        <p className="text-gray-600 mb-2">
+                          Compress all {batchItems.length} images with default settings
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Or click any image to customize individually
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <motion.div
+          key="single"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.4 }}
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+        >
           {/* Left Half - Controls */}
-          <div className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="space-y-3"
+          >
             <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
@@ -879,7 +1353,7 @@ export function ImageCompression({}: ImageCompressionProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600">{uploadedImage?.filename}</p>
+                  <p className="text-sm text-gray-600 break-all">{uploadedImage?.filename}</p>
                   <p className="text-xs text-gray-500">
                     {uploadedImage?.originalDimensions.width} × {uploadedImage?.originalDimensions.height} •{' '}
                     {((uploadedImage?.size || 0) / (1024 * 1024)).toFixed(2)} MB
@@ -891,7 +1365,7 @@ export function ImageCompression({}: ImageCompressionProps) {
                 <CardHeader>
                   <CardTitle>Compression Settings</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-3">
                   {/* Mode Toggle */}
                   <div className="space-y-3">
                     <label className="text-sm font-medium text-gray-700">
@@ -983,37 +1457,104 @@ export function ImageCompression({}: ImageCompressionProps) {
                 </CardContent>
               </Card>
 
-            <Button
-              onClick={handleCompress}
-              disabled={isCompressing}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-              size="lg"
-            >
-              {isCompressing ? 'Compressing...' : 'Apply Compression'}
-            </Button>
-
-            {compressedImage && (
+            {isCompressing ? (
+              <div className="flex gap-2">
+                <Button
+                  disabled
+                  className="flex-1 bg-orange-600 text-white"
+                  size="lg"
+                >
+                  Compressing...
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelDialog(true)}
+                  className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center justify-center gap-2"
+                  size="lg"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
+            ) : (
               <Button
-                onClick={handleDownload}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+                onClick={handleCompress}
+                disabled={!!compressedImage}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 size="lg"
               >
-                <Download className="h-5 w-5" />
-                Download Image
+                {compressedImage ? 'Already Compressed ✓' : 'Apply Compression'}
               </Button>
             )}
 
-            {(uploadError || compressionError) && (
-              <Card className="border-red-200">
-                <CardContent className="pt-6">
-                  <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+            <AnimatePresence>
+              {compressedImage && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-2"
+                >
+                  <Button
+                    onClick={handleDownload}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+                    size="lg"
+                  >
+                    <Download className="h-5 w-5" />
+                    Download Image
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (onEditAgain && compressedImage && uploadedImage) {
+                        // Pass the compressed image to edit again with a different mode
+                        const mimeType = uploadedImage.mimetype || 'image/jpeg';
+                        const imageData = `data:${mimeType};base64,${compressedImage.imageData}`;
+                        onEditAgain(imageData, {
+                          filename: uploadedImage.filename,
+                          mimetype: mimeType
+                        });
+                      } else {
+                        // Fallback to reset
+                        setCompressedImage(null);
+                        setCompressionError('');
+                        resetUpload();
+                      }
+                    }}
+                    variant="outline"
+                    className="w-full border-blue-300 text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"
+                    size="lg"
+                  >
+                    <Edit2 className="h-5 w-5" />
+                    Edit Again
+                  </Button>
+                </motion.div>
+              )}
+
+              {(uploadError || compressionError) && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="border-red-200">
+                    <CardContent className="pt-6">
+                      <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
 
           {/* Right Half - Preview and Stats */}
-          <div className="space-y-6">
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 }}
+            className="space-y-3"
+          >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -1147,32 +1688,95 @@ export function ImageCompression({}: ImageCompressionProps) {
               </CardContent>
             </Card>
 
-            {isCompressing && (
-              <ProcessingStatus
-                status={{
-                  stage: 'optimizing',
-                  progress: 50,
-                  message: 'Compressing image...',
-                }}
-              />
-            )}
-          </div>
-        </div>
+            <AnimatePresence>
+              {isCompressing && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <ProcessingStatus
+                    status={{
+                      stage: 'optimizing',
+                      progress: 50,
+                      message: 'Compressing image...',
+                    }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {(uploadError || compressionError) && !uploadedImage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-2xl mx-auto"
+          >
+            <Card className="border-red-200">
+              <CardContent className="pt-6">
+                <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Format Dialog for Single File Mode */}
+      {compressedImage && uploadedImage && !isBatchMode && (
+        <FormatDownloadDialog
+          isOpen={showFormatDialog && !selectedDownloadId}
+          onClose={() => setShowFormatDialog(false)}
+          onDownload={handleFormatDownload}
+          currentFormat="jpeg"
+          imageData={compressedImage.imageData}
+          filename={uploadedImage.filename}
+        />
       )}
 
-      {(uploadError || compressionError) && !uploadedImage && (
-        <div className="max-w-2xl mx-auto">
-          <Card className="border-red-200">
-            <CardContent className="pt-6">
-              <p className="text-red-600 text-sm">{uploadError || compressionError}</p>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Format Dialog for Batch Mode */}
+      {selectedDownloadId && batchItems.find(i => i.id === selectedDownloadId) && (
+        <FormatDownloadDialog
+          isOpen={showFormatDialog && !!selectedDownloadId}
+          onClose={() => {
+            setShowFormatDialog(false);
+            setSelectedDownloadId(null);
+          }}
+          onDownload={handleBatchFormatDownload}
+          currentFormat="jpeg"
+          imageData={batchItems.find(i => i.id === selectedDownloadId)?.processedData || ''}
+          filename={batchItems.find(i => i.id === selectedDownloadId)?.filename || 'image'}
+        />
       )}
 
-      <footer className="text-center mt-12 text-gray-500 text-sm">
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.6 }}
+        className="text-center mt-4 text-gray-500 text-xs"
+      >
         <p>No file size limits • Supports JPEG, PNG, WebP and SVG</p>
-      </footer>
-    </div>
+      </motion.footer>
+
+      {/* Cancel Dialog */}
+      <CancelDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={() => {
+          setShowCancelDialog(false);
+          setIsCompressing(false);
+          setCompressionError('');
+        }}
+        title="Cancel Compression?"
+        description="Are you sure you want to cancel the compression? Any progress will be lost."
+      />
+    </motion.div>
   );
 }

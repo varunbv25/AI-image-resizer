@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createCloudConvertService } from '@/lib/cloudConvert';
 import { isPayloadTooLargeError } from '@/lib/requestHelper';
 import { APIResponse } from '@/types';
+import { ImageProcessor } from '@/lib/imageProcessor';
 
 // Configure route to handle large payloads and prevent timeout
 export const runtime = 'nodejs';
@@ -27,97 +27,77 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    try {
-      const cloudConvert = createCloudConvertService(process.env.CLOUDCONVERT_API_KEY);
+    const sharp = (await import('sharp')).default;
 
-      const optimalSettings = await cloudConvert.getOptimalWebSettings(file.size, file.type);
-      const compressionOptions = {
-        quality: quality ? parseInt(quality) : optimalSettings.quality,
-        format: (format as 'jpg' | 'png' | 'webp') || 'jpg',
-        optimize: true,
-      };
+    // Check if SVG and convert to raster first
+    const header = buffer.slice(0, 100).toString('utf-8');
+    const isSVG = header.includes('<svg') || header.includes('<?xml');
 
-      console.log('Compressing with options:', compressionOptions);
-
-      const compressedBuffer = await cloudConvert.compressImage(
-        buffer,
-        file.name,
-        compressionOptions
-      );
-
-      const response: APIResponse = {
-        success: true,
-        data: {
-          filename: file.name.replace(/\.[^/.]+$/, '') + `.${compressionOptions.format}`,
-          originalSize: file.size,
-          compressedSize: compressedBuffer.length,
-          compressionRatio: ((file.size - compressedBuffer.length) / file.size * 100).toFixed(1),
-          imageData: compressedBuffer.toString('base64'),
-          mimetype: `image/${compressionOptions.format}`,
-        },
-      };
-
-      console.log('Compression successful, original:', file.size, 'compressed:', compressedBuffer.length);
-      return NextResponse.json(response);
-
-    } catch (cloudConvertError) {
-      console.warn('CloudConvert failed, using fallback compression:', cloudConvertError);
-
-      const sharp = (await import('sharp')).default;
-
-      // Check if SVG and convert to raster first
-      const header = buffer.slice(0, 100).toString('utf-8');
-      const isSVG = header.includes('<svg') || header.includes('<?xml');
-
-      let workingBuffer: Buffer = buffer;
-      if (isSVG) {
-        console.log('Converting SVG to raster format for compression...');
-        const svgConverted = await sharp(buffer, {
-          density: 300,
-          limitInputPixels: 1000000000
-        })
-        .png()
-        .toBuffer();
-        workingBuffer = Buffer.from(svgConverted);
-      }
-
-      let sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
-
-      const qualityValue = quality ? parseInt(quality) : 80;
-
-      switch (format || 'jpeg') {
-        case 'jpg':
-        case 'jpeg':
-          sharpInstance = sharpInstance.jpeg({ quality: qualityValue, mozjpeg: true });
-          break;
-        case 'png':
-          sharpInstance = sharpInstance.png({ quality: qualityValue, compressionLevel: 9 });
-          break;
-        case 'webp':
-          sharpInstance = sharpInstance.webp({ quality: qualityValue });
-          break;
-        default:
-          sharpInstance = sharpInstance.jpeg({ quality: qualityValue, mozjpeg: true });
-      }
-
-      const compressedBuffer = await sharpInstance.toBuffer();
-
-      const response: APIResponse = {
-        success: true,
-        data: {
-          filename: file.name.replace(/\.[^/.]+$/, '') + `.${format || 'jpg'}`,
-          originalSize: file.size,
-          compressedSize: compressedBuffer.length,
-          compressionRatio: ((file.size - compressedBuffer.length) / file.size * 100).toFixed(1),
-          imageData: compressedBuffer.toString('base64'),
-          mimetype: `image/${format || 'jpeg'}`,
-          fallbackUsed: true,
-        },
-      };
-
-      console.log('Fallback compression successful, original:', file.size, 'compressed:', compressedBuffer.length);
-      return NextResponse.json(response);
+    let workingBuffer: Buffer = buffer;
+    if (isSVG) {
+      console.log('Converting SVG to raster format for compression...');
+      const svgConverted = await sharp(buffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+      workingBuffer = Buffer.from(svgConverted);
     }
+
+    let sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
+
+    const qualityValue = quality ? parseInt(quality) : 80;
+
+    switch (format || 'jpeg') {
+      case 'jpg':
+      case 'jpeg':
+        sharpInstance = sharpInstance.jpeg({ quality: qualityValue, mozjpeg: true });
+        break;
+      case 'png':
+        sharpInstance = sharpInstance.png({ quality: qualityValue, compressionLevel: 9 });
+        break;
+      case 'webp':
+        sharpInstance = sharpInstance.webp({ quality: qualityValue });
+        break;
+      default:
+        sharpInstance = sharpInstance.jpeg({ quality: qualityValue, mozjpeg: true });
+    }
+
+    const compressedBuffer = await sharpInstance.toBuffer();
+
+    // Auto-upscale if < 100KB
+    const processor = new ImageProcessor();
+    const metadata = await sharp(compressedBuffer, { limitInputPixels: 1000000000 }).metadata();
+
+    const upscaledResult = await processor.autoUpscaleIfNeeded({
+      buffer: compressedBuffer,
+      metadata: {
+        width: metadata.width || 0,
+        height: metadata.height || 0,
+        format: (metadata.format as string) || format || 'jpeg',
+        size: compressedBuffer.length,
+      },
+    });
+
+    const finalBuffer = upscaledResult.buffer;
+    const wasUpscaled = upscaledResult.wasUpscaled || false;
+
+    const response: APIResponse = {
+      success: true,
+      data: {
+        filename: file.name.replace(/\.[^/.]+$/, '') + `.${format || 'jpg'}`,
+        originalSize: file.size,
+        compressedSize: finalBuffer.length,
+        compressionRatio: ((file.size - finalBuffer.length) / file.size * 100).toFixed(1),
+        imageData: finalBuffer.toString('base64'),
+        mimetype: `image/${format || 'jpeg'}`,
+        wasUpscaled,
+      },
+    };
+
+    console.log('Compression successful, original:', file.size, 'compressed:', compressedBuffer.length);
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Compress error:', error);

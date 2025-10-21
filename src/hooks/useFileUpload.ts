@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { ImageDimensions, APIResponse } from '@/types';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { compressImage, formatFileSize, calculateCompressionRatio } from '@/lib/clientImageCompression';
+import { validateImageFile } from '@/lib/fileValidation';
 
 interface UploadedImageData {
   filename: string;
@@ -17,12 +18,22 @@ export function useFileUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<UploadedImageData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<{ type: 'format' | 'size' | null; filename: string | null }>({ type: null, filename: null });
 
   const uploadFile = useCallback(async (file: File) => {
     setIsUploading(true);
     setError(null);
+    setValidationError({ type: null, filename: null });
 
     try {
+      // Validate file format and size
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        setValidationError({ type: validation.errorType || 'format', filename: file.name });
+        setError(validation.error || 'Invalid file');
+        setIsUploading(false);
+        return;
+      }
       const originalSize = file.size;
       console.log(`Original file size: ${formatFileSize(originalSize)}`);
 
@@ -72,12 +83,14 @@ export function useFileUpload() {
     setUploadedImage(null);
     setError(null);
     setIsUploading(false);
+    setValidationError({ type: null, filename: null });
   }, []);
 
   return {
     isUploading,
     uploadedImage,
     error,
+    validationError,
     uploadFile,
     reset,
   };

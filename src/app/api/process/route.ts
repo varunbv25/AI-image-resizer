@@ -21,6 +21,14 @@ interface ProcessRequestBody {
 
 export async function POST(req: NextRequest) {
   try {
+    // Get API key from environment
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (geminiApiKey) {
+      console.log('✅ Gemini API key loaded from environment');
+    } else {
+      console.warn('⚠️ Gemini API key not found - AI features will be disabled');
+    }
+
     // Use custom JSON parser to support large payloads (up to 100MB)
     const body = await parseJsonBody<ProcessRequestBody>(req);
     const {
@@ -39,7 +47,7 @@ export async function POST(req: NextRequest) {
     const imageBuffer = Buffer.from(imageData, 'base64');
 
     // Get original dimensions
-    const processor = new ImageProcessor(process.env.GOOGLE_AI_API_KEY || 'AIzaSyCRTkZUzzC3tBlb9lNmZTmgKz2l_HZRbpw');
+    const processor = new ImageProcessor(geminiApiKey);
     const originalDimensions = await processor.getImageDimensions(imageBuffer);
 
     // Process the image
@@ -57,8 +65,13 @@ export async function POST(req: NextRequest) {
       strategy
     );
 
+    // Auto-upscale if image is < 100KB to reach 150-200KB range
+    const upscaledResult = await processor.autoUpscaleIfNeeded(processedImage);
+    const finalImage = upscaledResult;
+    const wasUpscaled = upscaledResult.wasUpscaled || false;
+
     // Compress the processed image for optimal web use
-    let finalImageBuffer = processedImage.buffer;
+    let finalImageBuffer = finalImage.buffer;
     let fallbackUsed = false;
 
     try {
@@ -90,10 +103,11 @@ export async function POST(req: NextRequest) {
       data: {
         imageData: finalImageBuffer.toString('base64'),
         metadata: {
-          ...processedImage.metadata,
+          ...finalImage.metadata,
           size: finalImageBuffer.length,
+          wasUpscaled,
         },
-        filename: FileHandler.generateFileName('image', 'resized'),
+        filename: FileHandler.generateFileName('image', wasUpscaled ? 'expanded-upscaled' : 'expanded'),
         ...(fallbackUsed && { fallbackUsed }),
       },
     };

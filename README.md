@@ -1,6 +1,6 @@
 # AI Image Processing Suite
 
-A comprehensive image processing platform offering four powerful modes: AI-powered smart resizing with canvas extension, precision manual cropping, advanced upscaling, and intelligent image compression. Built with Next.js 15, TypeScript, and Google's Gemini AI for intelligent image processing.
+A comprehensive image processing platform offering five powerful modes: AI-powered smart resizing with canvas extension, precision manual cropping, intelligent image compression, AI-powered enhancement, and instant rotate/flip transformations. Built with Next.js 15, TypeScript, and Google's Gemini AI for intelligent image processing.
 
 ## 🌟 Features
 
@@ -30,18 +30,29 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 - **Frame Constraints**: Maintains aspect ratio while allowing flexible positioning
 - **High-Quality Output**: Preserves image quality during cropping process
 
-### 🔍 Upscaling
-- **Quality Enhancement**: Advanced upscaling algorithms for resolution improvement
-- **Scale Factor Control**: 1.1x to 4x scaling options or custom target resolutions
-- **Upscaling Only**: Constrained to only enlarge images, not reduce size
-- **Minimum Constraints**: Target resolution cannot be smaller than original
-- **Batch Processing**: Support for processing multiple images simultaneously with sidebar UI
-- **Per-Image Settings**: Customize scale factor, target resolution, and quality for each image individually
-- **Batch Actions**: Process all images at once with default settings or customize each one
+### ✨ Image Enhancement
+- **AI-Powered Clarity**: Deblur and sharpen images using advanced ONNX-based enhancement models
+- **Multiple Enhancement Methods**: Choose from Deblur, Sharpen, or Auto modes
+- **Adjustable Sharpness**: Fine-tune enhancement intensity with precision sliders
+- **Batch Processing**: Process multiple images simultaneously with sidebar UI
+- **Per-Image Settings**: Customize enhancement method and sharpness for each image individually
 - **Status Tracking**: Real-time status indicators (pending, processing, completed, error) for each image
-- **Bulk Download**: Download all processed images as a ZIP file or individually
-- **Quality Preservation**: Maintains image clarity and detail during upscaling
-- **Format Optimization**: Automatic format selection for best quality-to-size ratio
+- **Bulk Download**: Download all enhanced images as a ZIP file or individually
+- **Auto-Upscale**: Images under 100KB are automatically upscaled to 190-200KB range
+- **Format Optimization**: Supports JPEG, PNG, WebP, and SVG inputs
+- **Quality Preservation**: Maintains visual fidelity while enhancing details
+
+### 🔄 Rotate & Flip
+- **Quick Rotations**: Instant 90°, 180°, and 270° clockwise rotations
+- **Horizontal & Vertical Flips**: Mirror images with one click
+- **Custom Angle Rotation**: Rotate by any custom degree value (0-360°)
+- **Batch Processing**: Transform multiple images simultaneously with sidebar UI
+- **Per-Image Settings**: Customize rotation and flip operations for each image individually
+- **Status Tracking**: Real-time status indicators (pending, processing, completed, error) for each image
+- **Bulk Download**: Download all transformed images as a ZIP file or individually
+- **Lossless Transformations**: Maintains image quality during operations
+- **Format Support**: Works with JPEG, PNG, WebP, and SVG inputs
+- **Instant Preview**: See transformations in real-time before processing
 
 ### 📦 Image Compression
 - **Smart File Size Reduction**: Reduce image file sizes by up to 90% while maintaining visual quality
@@ -65,11 +76,19 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 ### 🎯 Universal Features
 - **Drag & Drop Interface**: Intuitive file upload with comprehensive validation
 - **Progress Tracking**: Real-time processing status with detailed progress indicators
+- **Chain Operations**: Process images across multiple modes sequentially with "Edit Again" feature
+  - Process with one mode → Edit Again → Continue with another mode on the same image
+  - Example workflow: Compress → Rotate → Enhance → Crop → Download
+  - Seamlessly pass processed images between all 5 modes
 - **Error Handling**: Graceful error handling with user-friendly messages
+  - Unsupported format detection with clear supported format list
+  - Cancel operations mid-process with confirmation dialog
+  - Validation errors with retry options
 - **File Validation**: Automatic validation of file size (max 10MB) and supported formats
 - **Large Image Support**: Custom request parser handles payloads up to 100MB (deployment platform dependent)
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **Instant Download**: One-click download of processed images
+- **Format Conversion**: Convert between formats while processing
 - **No Upload Limits**: Process images without restrictions
 - **Multiple Format Support**: JPEG, PNG, WebP, SVG input | JPEG, PNG, WebP output
 - **SVG Processing**: Automatic SVG to raster conversion at 300 DPI for high-quality output
@@ -93,10 +112,10 @@ A comprehensive image processing platform offering four powerful modes: AI-power
 
 ### SVG Processing
 
-The application provides comprehensive SVG support across all four processing modes with intelligent handling for input preprocessing, processing, and post-processing stages:
+The application provides comprehensive SVG support across all five processing modes with intelligent handling for input preprocessing, processing, and post-processing stages:
 
 #### Core SVG Features
-- **Universal Input Support**: SVG files accepted in all four processing modes (AI Resizing, Manual Cropping, Upscaling, Compression)
+- **Universal Input Support**: SVG files accepted in all five processing modes (AI Resizing, Manual Cropping, Image Compression, Image Enhancement, Rotate & Flip)
 - **Output Support**: Can output processed images as SVG format (embedded raster as base64 PNG in SVG wrapper)
 - **Format Detection**: Automatic MIME type detection (`image/svg+xml`) from base64 signatures
 - **High-Quality Conversion**: All processing uses 300 DPI density for superior raster output
@@ -104,7 +123,7 @@ The application provides comprehensive SVG support across all four processing mo
 
 #### SVG Processing by Mode
 
-All four processing modes follow a consistent three-stage pipeline for SVG handling:
+All five processing modes follow a consistent three-stage pipeline for SVG handling:
 
 ##### **1. AI Image Resizing Mode** (`/api/process` → `imageProcessor.ts`)
 
@@ -157,8 +176,8 @@ All four processing modes follow a consistent three-stage pipeline for SVG handl
 
 **Processing (Cropping Operation)**:
 - Sharp.js cropping with quality preservation (quality: 80-85)
-- CloudConvert fallback with same SVG preprocessing
 - Supports batch processing with per-image settings
+- High-performance direct cropping without external dependencies
 
 **Post-Processing (Output)**:
 - Format conversion to JPEG, PNG, or WebP
@@ -820,12 +839,21 @@ npm run lint
 
 ### Processing Mode Selection
 
-The application offers four distinct processing modes accessible from the main interface:
+The application offers five distinct processing modes accessible from the main interface:
 
 1. **AI Image Resizing** - For intelligent canvas extension and aspect ratio changes
 2. **Manual Cropping** - For precise, hands-on image cropping
-3. **Upscaling** - For resolution enhancement and quality improvement
-4. **Image Compression** - For file size optimization and web-ready images
+3. **Image Compression** - For file size optimization and web-ready images
+4. **Image Enhancement** - For AI-powered deblurring and sharpening
+5. **Rotate & Flip** - For instant image transformations (rotations and flips)
+
+### Chain Operations
+
+All modes support seamless operation chaining with the "Edit Again" feature:
+1. Process an image in any mode
+2. Click "Edit Again" after processing
+3. Select a different mode to continue editing the same processed image
+4. Repeat as needed to create complex multi-stage workflows
 
 ### 🤖 AI Image Resizing Mode
 
@@ -1157,10 +1185,10 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 - **SVG Conversion**: SVG files automatically converted to raster at 300 DPI
 - **Processing Timeout**: 60 seconds
 - **Default Quality**: 80%
-- **Upscaling Range**: 1.1x to 4x original resolution (enlarge only)
-- **Batch Processing**: Supported in Manual Cropping, Upscaling, and Image Compression modes
+- **Batch Processing**: Supported in Manual Cropping, Image Compression, Image Enhancement, and Rotate & Flip modes
 - **Per-Image Settings**: Customize processing parameters for each image individually
 - **Batch Download**: ZIP file generation for multiple processed images (JSZip)
+- **Chain Operations**: All 5 modes support seamless image passing with "Edit Again" feature
 
 ### Supported Aspect Ratios
 
@@ -1185,11 +1213,6 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 2. **Precision Algorithms**: High-quality cropping with Sharp.js processing
 3. **Quality Preservation**: Maintains original image fidelity during crop operations
 
-**Upscaling:**
-1. **Advanced Interpolation**: Multi-algorithm approach for optimal quality
-2. **Detail Enhancement**: Edge-preserving techniques for sharpness
-3. **Batch Optimization**: Efficient processing for multiple images
-
 **Image Compression:**
 1. **Auto-Optimized Starting Point**: Begins with optimal quality settings for each format
 2. **Iterative Optimization**: Multi-pass compression with automatic quality adjustment
@@ -1200,6 +1223,20 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 4. **Intelligent Size Targeting**: Automatically reduces quality by 10% increments to reach target
 5. **Quality Thresholds**: Ensures minimum 10% quality, maximum 10 optimization attempts
 6. **Interactive UI**: Mouse wheel scroll support on all sliders for precise control
+
+**Image Enhancement:**
+1. **ONNX Model Processing**: Uses client-side ONNX models for AI-powered enhancement
+2. **Multiple Enhancement Methods**: Deblur, Sharpen, and Auto modes
+3. **Adjustable Sharpness**: Fine-tune enhancement intensity
+4. **Auto-Upscale**: Automatically upscales images under 100KB to 190-200KB range
+5. **Batch Optimization**: Efficient processing for multiple images
+
+**Rotate & Flip:**
+1. **Instant Transformations**: Quick 90°, 180°, 270° rotations and flips
+2. **Custom Angle Support**: Rotate by any custom degree value (0-360°)
+3. **Lossless Operations**: Maintains image quality during transformations
+4. **Batch Processing**: Efficient transformation of multiple images
+5. **Real-time Preview**: See transformations before processing
 
 ## 🏗️ Architecture
 
@@ -1997,10 +2034,11 @@ This project is private and proprietary. All rights reserved.
 
 ---
 
-**Note**: This comprehensive image processing suite offers four distinct modes:
+**Note**: This comprehensive image processing suite offers five distinct modes with seamless chaining capabilities:
 - **AI Image Resizing** requires a Google Gemini API key for AI-powered features (fallback methods available)
 - **Manual Cropping** works entirely offline with no external dependencies
-- **Upscaling** uses advanced local algorithms for quality enhancement
 - **Image Compression** utilizes format-specific optimization for efficient file size reduction
+- **Image Enhancement** uses ONNX-based AI models for deblurring and sharpening
+- **Rotate & Flip** provides instant image transformations with batch processing support
 
-Choose the mode that best fits your workflow and requirements!
+All modes support the "Edit Again" feature, allowing you to chain multiple operations on the same image seamlessly. Choose the mode that best fits your workflow and requirements!
