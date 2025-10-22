@@ -212,7 +212,7 @@ export class ImageProcessor {
 
                 ZOOM OUT THE IMAGE to MAKE THE SUBJECT SMALLER and SHOW MORE OF THE BACKGROUND.
 
-                Keep the subject in the MIDDLE OF THE FRAME and ADD NEW BACKGROUND AROUND IT to reach the target size.
+                Keep the subject in the MIDDLE OF THE FRAME and ZOOM OUT THE IMAGE TO MAKE THE SUBJECT SMALLER AND IN THE MIDDLE.
 
                 THE EXPANDED BACKGROUND MUST BE GENERATED USING AI to seamlessly continue the existing scene.
 
