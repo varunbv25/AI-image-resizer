@@ -10,7 +10,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, RotateCcw, Sparkles, Info, X, Edit2 } from 'lucide-react';
+import { Download, Sparkles, Info, X, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ONNXImageEnhancer } from '@/lib/onnxInference';
 import JSZip from 'jszip';
@@ -284,22 +284,6 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const handleReset = () => {
-    resetUpload();
-    setEnhancedImage(null);
-    setProcessingStatus({
-      stage: 'idle',
-      progress: 0,
-      message: ''
-    });
-    setIsBatchMode(false);
-    setBatchItems([]);
-    setTotalProcessed(0);
-    setUploadedFiles([]);
-    setSelectedImageId(null);
-    setBatchProcessingStarted(false);
   };
 
   const handleEnhance = async () => {
@@ -602,7 +586,6 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
               onProcessSingle={processSingleImage}
               onDownloadAll={handleDownloadAll}
               onDownloadSingle={handleDownloadSingle}
-              onReset={handleReset}
               onSelectImage={setSelectedImageId}
               selectedImageId={selectedImageId}
               totalProcessed={totalProcessed}
@@ -694,16 +677,8 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
               >
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
+                    <CardTitle>
                       Image Uploaded
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleReset}
-                      >
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Reset
-                      </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -788,16 +763,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                 transition={{ duration: 0.3, delay: 0.5 }}
                 className="flex gap-2"
               >
-                {!isProcessing && !enhancedImage && (
-                  <Button
-                    onClick={handleEnhance}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-sm py-2"
-                  >
-                    Enhance Image
-                  </Button>
-                )}
-
-                {isProcessing && (
+                {isProcessing ? (
                   <div className="flex gap-2">
                     <Button
                       disabled
@@ -814,9 +780,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                       Cancel
                     </Button>
                   </div>
-                )}
-
-                {enhancedImage && !isProcessing && (
+                ) : enhancedImage ? (
                   <div className="flex gap-2">
                     <Button
                       onClick={handleDownload}
@@ -836,8 +800,8 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                             mimetype: mimeType
                           });
                         } else {
-                          // Fallback to go back
-                          onBack();
+                          // Fallback to reset
+                          setEnhancedImage(null);
                         }
                       }}
                       variant="outline"
@@ -847,6 +811,13 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                       Edit Again
                     </Button>
                   </div>
+                ) : (
+                  <Button
+                    onClick={handleEnhance}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-sm py-2"
+                  >
+                    Enhance Image
+                  </Button>
                 )}
               </motion.div>
             </motion.div>

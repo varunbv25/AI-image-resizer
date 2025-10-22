@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Download, X, FileImage } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -15,6 +16,7 @@ interface FormatDownloadDialogProps {
   currentFormat?: string;
   imageData: string;
   filename: string;
+  hideQualitySlider?: boolean;
 }
 
 export function FormatDownloadDialog({
@@ -23,6 +25,7 @@ export function FormatDownloadDialog({
   onDownload,
   currentFormat = 'jpeg',
   imageData,
+  hideQualitySlider = false,
 }: FormatDownloadDialogProps) {
   const [selectedFormat, setSelectedFormat] = useState<ImageFormat>(currentFormat as ImageFormat);
   const [quality, setQuality] = useState<number>(90);
@@ -76,31 +79,29 @@ export function FormatDownloadDialog({
               {/* Format Selection */}
               <div>
                 <label className="block text-sm font-medium mb-2">Output Format</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {formats.map((format) => (
-                    <button
-                      key={format.value}
-                      onClick={() => setSelectedFormat(format.value)}
-                      className={`
-                        p-3 rounded-lg border-2 transition-all text-left
-                        ${selectedFormat === format.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-blue-300'
-                        }
-                      `}
-                    >
-                      <div className="font-semibold text-sm">{format.label}</div>
-                      <div className="text-xs text-gray-500 mt-1">{format.description}</div>
-                      {currentFormat === format.value && (
-                        <div className="text-xs text-blue-600 mt-1 font-medium">• Current format</div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                <Select value={selectedFormat} onValueChange={(value) => setSelectedFormat(value as ImageFormat)}>
+                  <SelectTrigger className="w-full bg-white border-black text-black hover:bg-gray-100">
+                    <SelectValue placeholder="Select file format" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-black">
+                    {formats.map((format) => (
+                      <SelectItem
+                        key={format.value}
+                        value={format.value}
+                        className="text-black hover:bg-gray-100 focus:bg-gray-200 focus:text-black data-[state=checked]:bg-blue-600"
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium text-black">{format.label}</span>
+                          <span className="text-xs text-gray-900">{format.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Quality Slider (hidden for SVG) */}
-              {selectedFormat !== 'svg' && (
+              {/* Quality Slider (hidden for SVG and when hideQualitySlider is true) */}
+              {!hideQualitySlider && selectedFormat !== 'svg' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}

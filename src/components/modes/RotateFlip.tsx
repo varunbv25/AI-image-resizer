@@ -9,7 +9,7 @@ import { Slider } from '@/components/ui/slider';
 import { ImageUploader } from '@/components/ImageUploader';
 import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { RotateCw, RotateCcw, FlipHorizontal2, FlipVertical2, Download, RotateCcw as ResetIcon, Info, Edit2, X } from 'lucide-react';
+import { RotateCw, RotateCcw, FlipHorizontal2, FlipVertical2, Download, Info, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -327,22 +327,6 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
     }
   };
 
-  const handleReset = () => {
-    resetUpload();
-    setProcessedImage(null);
-    setIsBatchMode(false);
-    setBatchItems([]);
-    setTotalProcessed(0);
-    setUploadedFiles([]);
-    setSelectedImageId(null);
-    setBatchProcessingStarted(false);
-    // Reset transform states
-    setCustomAngle(0);
-    setFixedRotation(0);
-    setFlipHorizontal(false);
-    setFlipVertical(false);
-  };
-
   // Handler for 90-degree rotation button (cycles through 0, 90, 180, 270)
   const handleFixedRotate = () => {
     setFixedRotation(prev => (prev + 90) % 360);
@@ -564,7 +548,6 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
               onProcessSingle={processSingleImage}
               onDownloadAll={handleDownloadAll}
               onDownloadSingle={handleDownloadSingle}
-              onReset={handleReset}
               onSelectImage={setSelectedImageId}
               selectedImageId={selectedImageId}
               totalProcessed={totalProcessed}
@@ -762,12 +745,8 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
             <motion.div className="space-y-3">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
+                  <CardTitle>
                     Image Uploaded
-                    <Button variant="outline" size="sm" onClick={handleReset}>
-                      <ResetIcon className="h-4 w-4 mr-2" />
-                      Reset
-                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -861,46 +840,21 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
                       Cancel
                     </Button>
                   </div>
-                ) : processedMetadata ? (
-                  <div className="space-y-2">
-                    <Button
-                      onClick={handleDownload}
-                      className="w-full bg-teal-600 hover:bg-teal-700 flex items-center justify-center gap-2"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        if (onEditAgain && processedImage && uploadedImage) {
-                          // Pass the processed image to edit again with a different mode
-                          const mimeType = 'image/jpeg'; // RotateFlip always outputs JPEG
-                          const imageData = `data:${mimeType};base64,${processedImage}`;
-                          onEditAgain(imageData, {
-                            filename: uploadedImage.filename,
-                            mimetype: mimeType
-                          });
-                        } else {
-                          // Fallback to reset
-                          setProcessedImage(null);
-                          setProcessedMetadata(null);
-                          resetUpload();
-                        }
-                      }}
-                      variant="outline"
-                      className="w-full border-blue-300 text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                      Edit Again
-                    </Button>
-                  </div>
                 ) : (
                   <Button
-                    onClick={handleDownload}
+                    onClick={() => {
+                      if (processedMetadata) {
+                        // Reset to allow retry
+                        setProcessedImage(null);
+                        setProcessedMetadata(null);
+                      } else {
+                        handleDownload();
+                      }
+                    }}
                     className="w-full bg-teal-600 hover:bg-teal-700 flex items-center justify-center gap-2"
                   >
                     <Download className="h-4 w-4" />
-                    Download
+                    {processedMetadata ? 'Retry' : 'Download'}
                   </Button>
                 )}
               </div>
