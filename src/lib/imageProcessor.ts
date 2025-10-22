@@ -208,19 +208,20 @@ export class ImageProcessor {
       const prompt = [
         {
           text: `The original image is ${originalWidth} × ${originalHeight} pixels.
-                The target output MUST be 4160 × 4160 pixels.
+                The target output MUST be ${targetDimensions.width} × ${targetDimensions.height} pixels.
 
-                ZOOM OUT THE IMAGE to MAKE THE SUBJECT SMALLER and SHOW MORE OF THE BACKGROUND.
+                ZOOM OUT THE IMAGE and SHOW MORE OF THE BACKGROUND.
 
                 Keep the subject in the MIDDLE OF THE FRAME and ZOOM OUT THE IMAGE TO MAKE THE SUBJECT SMALLER AND IN THE MIDDLE.
 
                 THE EXPANDED BACKGROUND MUST BE GENERATED USING AI to seamlessly continue the existing scene.
 
                 STRICT RULES:
-                1. NEVER CROP - The original image must be intact and 100% visible in the output
+                1. NEVER CROP - THE ORIGINAL IMAGE MUST BE FULLY PRESERVED IN THE FINAL OUTPUT
                 2. NEVER RESIZE/SCALE - Keep the original image at its native resolution
                 3. NEVER STRETCH/DISTORT - Maintain the original quality and DO NOT STRETCH OR CROP any part of the image
                 4. ALWAYS EXPAND - Only ADD NEW CONTENT USING GENERATIVE AI around the original image to reach target size
+                5. CENTRALIZE SUBJECT - Keep the original image centered in the new expanded canvas
 
                 QUALITY REQUIREMENTS for the NEW generated areas only:
                 1. Analyze the original image background: colors, patterns, textures, lighting, shadows
