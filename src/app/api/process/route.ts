@@ -12,7 +12,8 @@ export const dynamic = 'force-dynamic';
 // Note: Body size limit configured in next.config.js (100MB)
 
 interface ProcessRequestBody {
-  imageData: string;
+  imageData?: string; // Base64 data (legacy)
+  blobUrl?: string; // Vercel Blob URL (new)
   targetDimensions: ImageDimensions;
   quality?: number;
   format?: 'jpeg' | 'png' | 'webp';
@@ -33,18 +34,35 @@ export async function POST(req: NextRequest) {
     const body = await parseJsonBody<ProcessRequestBody>(req);
     const {
       imageData,
+      blobUrl,
       targetDimensions,
       quality = 80,
       format = 'jpeg',
       strategy = { type: 'ai' },
     } = body;
 
-    if (!imageData || !targetDimensions) {
-      throw new Error('Missing required parameters');
+    if (!targetDimensions) {
+      throw new Error('Missing target dimensions');
     }
 
-    // Convert base64 back to buffer
-    const imageBuffer = Buffer.from(imageData, 'base64');
+    let imageBuffer: Buffer;
+
+    // Support both blob URL and legacy base64 data
+    if (blobUrl) {
+      // Fetch image from Vercel Blob
+      console.log('Fetching image from blob:', blobUrl);
+      const blobResponse = await fetch(blobUrl);
+      if (!blobResponse.ok) {
+        throw new Error('Failed to fetch image from blob storage');
+      }
+      const arrayBuffer = await blobResponse.arrayBuffer();
+      imageBuffer = Buffer.from(arrayBuffer);
+    } else if (imageData) {
+      // Legacy: Convert base64 to buffer
+      imageBuffer = Buffer.from(imageData, 'base64');
+    } else {
+      throw new Error('No image data or blob URL provided');
+    }
 
     // Get original dimensions
     const processor = new ImageProcessor(geminiApiKey);
@@ -95,6 +113,18 @@ export async function POST(req: NextRequest) {
     } catch (compressionError) {
       console.warn('CloudConvert compression failed, using original:', compressionError);
       fallbackUsed = true;
+    }
+
+    // Clean up blob if it was used
+    if (blobUrl) {
+      try {
+        const { del } = await import('@vercel/blob');
+        await del(blobUrl);
+        console.log('Cleaned up blob:', blobUrl);
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup blob:', cleanupError);
+        // Don't fail the request if cleanup fails
+      }
     }
 
     // Return processed image

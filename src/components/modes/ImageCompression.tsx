@@ -8,7 +8,7 @@ import { Slider } from '@/components/ui/slider';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { BatchItem } from '@/components/BatchProcessor';
-import { useFileUpload } from '@/hooks/useFileUpload';
+import { useFileUploadWithBlob } from '@/hooks/useFileUploadWithBlob';
 import { Download, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
@@ -68,12 +68,13 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
   const {
     isUploading,
+    uploadProgress,
     uploadedImage,
     error: uploadError,
     validationError,
     uploadFile,
     reset: resetUpload,
-  } = useFileUpload();
+  } = useFileUploadWithBlob();
 
   // Auto-load pre-uploaded files
   useEffect(() => {
@@ -172,17 +173,21 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       ));
 
       try {
-        // Read file as base64
-        const base64 = await fileToBase64(file);
+        // Upload to blob first
+        const { upload } = await import('@vercel/blob/client');
+        const blob = await upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/blob/upload-token',
+        });
 
-        // Compress image
+        // Compress image using blob URL
         const response = await fetch('/api/compress-image', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            imageData: base64,
+            blobUrl: blob.url,
             maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
             maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
             quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
@@ -244,17 +249,21 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     ));
 
     try {
-      // Read file as base64
-      const base64 = await fileToBase64(file);
+      // Upload to blob first
+      const { upload } = await import('@vercel/blob/client');
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/blob/upload-token',
+      });
 
-      // Compress image
+      // Compress image using blob URL
       const response = await fetch('/api/compress-image', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          imageData: base64,
+          blobUrl: blob.url,
           maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
           maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
           quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
@@ -488,7 +497,8 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          imageData: uploadedImage.imageData,
+          blobUrl: uploadedImage.blobUrl, // Use blob URL instead of base64
+          imageData: !uploadedImage.blobUrl ? uploadedImage.imageData : undefined, // Fallback to base64 if no blob
           maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
           maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
           quality: compressionMode === 'quality' ? quality : undefined,

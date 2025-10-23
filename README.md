@@ -1,6 +1,14 @@
 # AI Image Processing Suite
 
-A comprehensive image processing platform offering five powerful modes: AI-powered smart resizing with canvas extension, precision manual cropping, intelligent image compression, AI-powered enhancement, and instant rotate/flip transformations. Built with Next.js 15, TypeScript, and Google's Gemini AI for intelligent image processing.
+A comprehensive, full-stack image processing platform offering **five powerful modes** with seamless operation chaining: AI-powered smart resizing with canvas extension, precision manual cropping, intelligent image compression, AI/ML-powered image enhancement with unblurring, and instant rotate/flip transformations. Built with Next.js 15, React 19, TypeScript, and Google's Gemini AI for intelligent image processing.
+
+**Key Features:**
+- 🤖 **Dual AI Systems**: Gemini 2.5 Flash Image for canvas extension + Gemini 2.0 Flash for image enhancement/unblurring
+- 🎨 **Modern UI**: Built with shadcn/ui components on Radix UI primitives + Tailwind CSS 4
+- ⚡ **Performance**: Sharp.js (libvips) for blazing-fast server-side processing + ONNX Runtime for client-side ML
+- 🔄 **Chain Operations**: Seamlessly process images across all 5 modes with "Edit Again" feature
+- 📦 **Batch Processing**: Process multiple images simultaneously with per-image settings customization
+- 🎯 **Unlimited File Sizes**: Vercel Blob integration bypasses 4.5MB serverless limits
 
 ## 🌟 Features
 
@@ -31,9 +39,12 @@ A comprehensive image processing platform offering five powerful modes: AI-power
 - **High-Quality Output**: Preserves image quality during cropping process
 
 ### ✨ Image Enhancement
-- **AI-Powered Clarity**: Deblur and sharpen images using advanced ONNX-based enhancement models
-- **Multiple Enhancement Methods**: Choose from Deblur, Sharpen, or Auto modes
-- **Adjustable Sharpness**: Fine-tune enhancement intensity with precision sliders
+- **Triple Enhancement System**: Choose from AI, ML, or traditional methods
+  - **Gemini AI Unblur**: Uses Gemini 2.0 Flash for intelligent blur reduction and clarity enhancement
+  - **NAFNet ML Model**: Client-side ONNX-based enhancement (runs in browser, no API needed)
+  - **Sharp.js Sharpening**: Fast, traditional sharpening with adjustable intensity (1-10 levels)
+- **Smart Method Selection**: Toggle between AI and non-AI methods based on your needs
+- **Adjustable Sharpness**: Fine-tune enhancement intensity with precision sliders (for Sharp.js method)
 - **Batch Processing**: Process multiple images simultaneously with sidebar UI
 - **Per-Image Settings**: Customize enhancement method and sharpness for each image individually
 - **Status Tracking**: Real-time status indicators (pending, processing, completed, error) for each image
@@ -41,6 +52,7 @@ A comprehensive image processing platform offering five powerful modes: AI-power
 - **Auto-Upscale**: Images under 100KB are automatically upscaled to 190-200KB range
 - **Format Optimization**: Supports JPEG, PNG, WebP, and SVG inputs
 - **Quality Preservation**: Maintains visual fidelity while enhancing details
+- **Automatic Fallback**: If AI enhancement fails, automatically falls back to Sharp.js
 
 ### 🔄 Rotate & Flip
 - **Quick Rotations**: Instant 90°, 180°, and 270° clockwise rotations
@@ -76,6 +88,11 @@ A comprehensive image processing platform offering five powerful modes: AI-power
 ### 🎯 Universal Features
 - **Drag & Drop Interface**: Intuitive file upload with comprehensive validation
 - **Progress Tracking**: Real-time processing status with detailed progress indicators
+- **Unlimited File Sizes**: ⭐ **NEW** - Upload images of any size using Vercel Blob direct uploads
+  - Bypasses 4.5MB serverless function limit
+  - Direct client-to-blob uploads with progress tracking
+  - Automatic cleanup after processing
+  - No more "Request Entity Too Large" errors!
 - **Chain Operations**: Process images across multiple modes sequentially with "Edit Again" feature
   - Process with one mode → Edit Again → Continue with another mode on the same image
   - Example workflow: Compress → Rotate → Enhance → Crop → Download
@@ -84,12 +101,10 @@ A comprehensive image processing platform offering five powerful modes: AI-power
   - Unsupported format detection with clear supported format list
   - Cancel operations mid-process with confirmation dialog
   - Validation errors with retry options
-- **File Validation**: Automatic validation of file size (max 10MB) and supported formats
-- **Large Image Support**: Custom request parser handles payloads up to 100MB (deployment platform dependent)
+- **File Validation**: Automatic validation of file format (size limits removed with blob uploads!)
 - **Responsive Design**: Works seamlessly across desktop and mobile devices
 - **Instant Download**: One-click download of processed images
 - **Format Conversion**: Convert between formats while processing
-- **No Upload Limits**: Process images without restrictions
 - **Multiple Format Support**: JPEG, PNG, WebP, SVG input | JPEG, PNG, WebP output
 - **SVG Processing**: Automatic SVG to raster conversion at 300 DPI for high-quality output
 
@@ -752,27 +767,62 @@ All four modes support seamless format conversion:
 
 ## 🛠 Technology Stack
 
-### Frontend
-- **Next.js 15**: React framework with App Router and Turbopack
-- **TypeScript**: Full type safety throughout the application
-- **Tailwind CSS 4**: Utility-first CSS framework for styling
-- **shadcn/ui**: High-quality UI components built on Radix UI
-- **Lucide React**: Beautiful, customizable icons
+### Frontend Framework
+- **Next.js 15.5.3**: React framework with App Router and Turbopack for lightning-fast development
+- **React 19.1.0**: Latest React with improved performance and new features
+- **TypeScript 5**: Full type safety throughout the application with strict mode enabled
 
-### Backend & Processing
-- **Next.js API Routes**: Serverless API endpoints for all processing modes
-- **Sharp.js**: High-performance image processing library (libvips-based)
-- **Formidable**: Multipart form data parsing for file uploads
-- **Google Gemini AI**: Gemini 2.5 Flash Image model for intelligent canvas extension
-- **Custom Processing Algorithms**: Edge detection, color sampling, and iterative compression
+### Styling & UI Components
+- **Tailwind CSS 4**: Utility-first CSS framework with PostCSS 4 integration
+- **shadcn/ui**: High-quality, accessible UI component library (copy-paste components, not npm package)
+- **Radix UI Primitives**: Unstyled, accessible component primitives
+  - `@radix-ui/react-dialog` v1.1.15 - Modal dialogs and overlays
+  - `@radix-ui/react-progress` v1.1.7 - Progress bars for processing status
+  - `@radix-ui/react-select` v2.2.6 - Accessible select dropdowns
+  - `@radix-ui/react-slider` v1.3.6 - Range sliders with mouse wheel support
+  - `@radix-ui/react-slot` v1.2.3 - Composition utility for flexible components
+  - `@radix-ui/react-tabs` v1.1.13 - Tab navigation for mode selection
+- **Styling Utilities**:
+  - `class-variance-authority` v0.7.1 - CVA for variant-based component APIs
+  - `clsx` v2.1.1 - Conditional class name utility
+  - `tailwind-merge` v3.3.1 - Merge Tailwind classes intelligently
+  - `tw-animate-css` v1.3.8 - Extended animation utilities
+- **Icons**: `lucide-react` v0.544.0 - Beautiful, customizable icon library (2000+ icons)
+- **Animations**: `framer-motion` v12.23.24 - Production-ready animation library
 
-### UI Components & Libraries
-- **Radix UI**: Accessible, unstyled UI primitives (Dialog, Progress, Select, Slider, Tabs)
-- **React Dropzone**: File upload with drag & drop functionality
-- **JSZip**: Client-side ZIP file generation for batch downloads
-- **Class Variance Authority**: Utility for creating variant-based component APIs
-- **clsx & tailwind-merge**: Conditional styling utilities
-- **Lucide React**: Beautiful, customizable icons
+### Backend & Image Processing
+- **Next.js API Routes**: Serverless API endpoints (`runtime: 'nodejs'`, `maxDuration: 60s`)
+- **Sharp.js v0.32.6**: High-performance image processing (libvips 8.14+ based)
+  - Lanczos3 kernel for upscaling
+  - MozJPEG compression
+  - Progressive JPEG encoding
+  - WebP and PNG optimization
+  - SVG rasterization at 300 DPI
+- **SVGO v4.0.0**: SVG optimization and minification
+- **Formidable v3.5.4**: Multipart form data parsing for file uploads
+
+### AI & Machine Learning
+- **Google Gemini AI** (`@google/genai` v1.20.0):
+  - **Gemini 2.5 Flash Image**: Intelligent canvas extension with generative fill
+  - **Gemini 2.0 Flash Exp**: AI-powered image enhancement and unblurring
+- **ONNX Runtime Web v1.23.0**: Client-side ML inference
+  - NAFNet model for browser-based image enhancement
+  - Runs entirely in the browser (no API calls needed)
+  - WebAssembly-accelerated inference
+
+### File Handling & Storage
+- **Vercel Blob**: Unlimited file size uploads (bypasses 4.5MB serverless limit)
+- **JSZip v3.10.1**: Client-side ZIP file generation for batch downloads
+- **React Dropzone v14.3.8**: Drag & drop file upload with validation
+- **Custom Helpers**:
+  - Client-side image compression (>3MB auto-compressed)
+  - Batch upload helper with progress tracking
+  - Custom JSON parser supporting 100MB payloads
+
+### Development Tools
+- **ESLint v9**: Code quality and consistency (@eslint/eslintrc v3)
+- **PostCSS**: CSS processing with Tailwind CSS 4
+- **Node.js 18+**: Runtime environment
 
 ## 🚀 Getting Started
 
@@ -799,15 +849,29 @@ yarn install
 
 3. **Set up environment variables:**
 ```bash
-# Copy the environment template (if available)
+# Copy the environment template
 cp .env.example .env.local
-# or create .env.local manually
 ```
 
-4. **Configure your API key in `.env.local`:**
+4. **Configure environment variables in `.env.local`:**
 ```env
+# Required: Google Gemini API Key for AI features
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Required for Vercel deployments: Blob Storage (handles unlimited file sizes)
+# Get this from Vercel Dashboard → Storage → Blob
+# Automatically set on Vercel deployment, only needed for local dev
+BLOB_READ_WRITE_TOKEN=your_blob_token_here
+
+# Optional: CloudConvert for advanced compression
+CLOUDCONVERT_API_KEY=your_cloudconvert_api_key_here
 ```
+
+**Important:** For unlimited file size uploads on Vercel:
+- Create a Blob Store in your Vercel project dashboard (Storage → Blob)
+- The `BLOB_READ_WRITE_TOKEN` will be automatically set in production
+- For local development, copy the token from Vercel to your `.env.local`
+- See [VERCEL_BLOB_SETUP.md](./VERCEL_BLOB_SETUP.md) for detailed instructions
 
 5. **Start the development server:**
 ```bash
@@ -1225,11 +1289,16 @@ Compress and optimize images for reduced file sizes (Image Compression mode).
 6. **Interactive UI**: Mouse wheel scroll support on all sliders for precise control
 
 **Image Enhancement:**
-1. **ONNX Model Processing**: Uses client-side ONNX models for AI-powered enhancement
-2. **Multiple Enhancement Methods**: Deblur, Sharpen, and Auto modes
-3. **Adjustable Sharpness**: Fine-tune enhancement intensity
-4. **Auto-Upscale**: Automatically upscales images under 100KB to 190-200KB range
-5. **Batch Optimization**: Efficient processing for multiple images
+1. **Triple Enhancement System**: Choose from three distinct enhancement methods
+   - **AI Enhancement (Gemini 2.0 Flash)**: Cloud-based AI for intelligent unblurring and clarity enhancement
+   - **ML Enhancement (NAFNet)**: Client-side ONNX model for browser-based enhancement (no API needed)
+   - **Traditional Enhancement (Sharp.js)**: Fast, adjustable sharpening with 1-10 intensity levels
+2. **Smart Method Toggle**: Switch between AI and non-AI methods with a single click
+3. **Automatic Fallback**: AI enhancement automatically falls back to Sharp.js if it fails
+4. **Adjustable Sharpness**: Fine-tune enhancement intensity for Sharp.js method (1-10 levels)
+5. **Auto-Upscale**: Automatically upscales images under 100KB to 190-200KB range
+6. **Batch Processing**: Efficient processing for multiple images with per-image method selection
+7. **Format Support**: Works with JPEG, PNG, WebP, and SVG inputs
 
 **Rotate & Flip:**
 1. **Instant Transformations**: Quick 90°, 180°, 270° rotations and flips
@@ -2035,10 +2104,19 @@ This project is private and proprietary. All rights reserved.
 ---
 
 **Note**: This comprehensive image processing suite offers five distinct modes with seamless chaining capabilities:
-- **AI Image Resizing** requires a Google Gemini API key for AI-powered features (fallback methods available)
+- **AI Image Resizing** requires a Google Gemini API key for AI-powered canvas extension (fallback methods available)
 - **Manual Cropping** works entirely offline with no external dependencies
 - **Image Compression** utilizes format-specific optimization for efficient file size reduction
-- **Image Enhancement** uses ONNX-based AI models for deblurring and sharpening
+- **Image Enhancement** offers three methods:
+  - **AI Enhancement**: Requires Gemini API key, provides intelligent unblurring
+  - **ML Enhancement**: Client-side NAFNet model (no API needed, runs in browser)
+  - **Traditional Enhancement**: Sharp.js sharpening (no dependencies)
 - **Rotate & Flip** provides instant image transformations with batch processing support
+
+**UI/UX Highlights:**
+- Built with **shadcn/ui** components on **Radix UI** primitives
+- Styled with **Tailwind CSS 4** for modern, responsive design
+- Animated with **Framer Motion** for smooth transitions
+- **2000+ Lucide icons** for beautiful, consistent iconography
 
 All modes support the "Edit Again" feature, allowing you to chain multiple operations on the same image seamlessly. Choose the mode that best fits your workflow and requirements!

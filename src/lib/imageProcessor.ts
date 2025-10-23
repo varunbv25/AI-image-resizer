@@ -1083,6 +1083,116 @@ export class ImageProcessor {
   }
 
   /**
+   * AI-powered image enhancement/unblurring using Gemini AI
+   * @param imageBuffer - Input image buffer
+   * @param format - Output format
+   */
+  async enhanceImageWithAI(
+    imageBuffer: Buffer,
+    format: 'jpeg' | 'png' | 'webp' = 'jpeg'
+  ): Promise<ProcessedImage> {
+    try {
+      if (!this.apiKey) {
+        throw new Error('Gemini API key is required for AI enhancement');
+      }
+
+      const sharp = await this.getSharp();
+
+      // Defensive SVG handling
+      let workingBuffer = imageBuffer;
+      const isSVGInput = await this.isSVG(imageBuffer);
+      if (isSVGInput) {
+        console.log('Converting SVG to raster for AI enhancement...');
+        workingBuffer = await sharp(imageBuffer, {
+          density: 300,
+          limitInputPixels: 1000000000
+        })
+        .png()
+        .toBuffer();
+      }
+
+      // Get metadata
+      const metadata = await sharp(workingBuffer, { limitInputPixels: 1000000000 }).metadata();
+
+      // Convert to JPEG for AI processing
+      const jpegBuffer = await sharp(workingBuffer, { limitInputPixels: 1000000000 })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+
+      const base64Image = jpegBuffer.toString('base64');
+
+      // Initialize Gemini AI
+      const ai = new GoogleGenAI({ apiKey: this.apiKey });
+
+      // Create prompt for image enhancement
+      const prompt = [
+        {
+          text: `You are an expert image enhancement AI. Your task is to enhance this image by:
+1. Reducing blur and increasing sharpness
+2. Improving clarity and detail
+3. Enhancing overall image quality
+4. Preserving natural colors and tones
+5. Not changing the content, composition, or dimensions
+
+Return the enhanced version of this image with improved sharpness and clarity. Do not add any text, watermarks, or modifications to the image content.`
+        },
+        {
+          inlineData: {
+            mimeType: 'image/jpeg',
+            data: base64Image,
+          },
+        },
+      ];
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-exp',
+        contents: prompt,
+      });
+
+      // Check if response contains an image
+      if (!response || !response.candidates || response.candidates.length === 0) {
+        throw new Error('AI enhancement failed: No response from Gemini AI');
+      }
+
+      const candidate = response.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        throw new Error('AI enhancement failed: No image data in response');
+      }
+
+      // Extract image data from response
+      const part = candidate.content.parts[0];
+      if (!part.inlineData || !part.inlineData.data) {
+        throw new Error('AI enhancement failed: No inline data in response');
+      }
+
+      const enhancedImageData = part.inlineData.data;
+      const enhancedBuffer = Buffer.from(enhancedImageData, 'base64');
+
+      // Optimize for web with specified format
+      const optimizedBuffer = await this.optimizeForWeb(enhancedBuffer, {
+        quality: 90,
+        format: format,
+        targetDimensions: { width: metadata.width || 0, height: metadata.height || 0 }
+      });
+
+      const finalMetadata = await sharp(optimizedBuffer, { limitInputPixels: 1000000000 }).metadata();
+
+      return {
+        buffer: optimizedBuffer,
+        metadata: {
+          width: finalMetadata.width || metadata.width || 0,
+          height: finalMetadata.height || metadata.height || 0,
+          format: finalMetadata.format || format,
+          size: optimizedBuffer.length,
+        },
+      };
+    } catch (error) {
+      console.error('AI enhancement error:', error);
+      throw new Error(`AI enhancement failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Rotate or flip image
    * @param imageBuffer - Input image buffer
    * @param operation - Transform operation

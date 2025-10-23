@@ -36,7 +36,7 @@ interface EnhancedImage {
   };
 }
 
-type EnhancementMethod = 'non-ai';
+type EnhancementMethod = 'ai' | 'non-ai';
 
 interface EnhancementSettings {
   method: EnhancementMethod;
@@ -137,7 +137,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
       originalSize: file.size,
       previewUrl: URL.createObjectURL(file),
       settings: {
-        method: 'non-ai', // Batch processing uses non-AI method by default for speed and consistency
+        method: enhancementMethod, // Use current selected method
         sharpness: 5,
       } as unknown as Record<string, unknown>,
     }));
@@ -181,7 +181,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         body: JSON.stringify({
           imageData: base64,
           format: 'jpeg',
-          method: settings.method === 'non-ai' ? 'sharp' : settings.method,
+          method: settings.method === 'ai' ? 'ai' : 'sharp',
           sharpness: settings.sharpness,
         }),
       });
@@ -291,7 +291,9 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
 
     setIsProcessing(true);
 
-    const message = onnxModelLoaded ? 'Processing with ML model...' : 'Applying sharpening filters...';
+    const message = enhancementMethod === 'ai'
+      ? 'Processing with Gemini AI...'
+      : (onnxModelLoaded ? 'Processing with NAFNet ML model...' : 'Applying sharpening filters...');
 
     setProcessingStatus({
       stage: 'analyzing',
@@ -300,6 +302,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     });
 
     try {
+      // Use client-side ONNX if available and non-AI method is selected
       if (enhancementMethod === 'non-ai' && onnxEnhancer && onnxModelLoaded) {
         setProcessingStatus({
           stage: 'enhancing',
@@ -369,7 +372,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         body: JSON.stringify({
           imageData: uploadedImage.imageData,
           format: 'jpeg',
-          method: 'sharp',
+          method: enhancementMethod === 'ai' ? 'ai' : 'sharp',
           sharpness: sharpness,
         }),
       });
@@ -723,7 +726,33 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
-                    {!onnxModelLoaded && (
+                    {/* Enhancement Method Toggle */}
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-gray-700">
+                        Enhancement Method
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant={enhancementMethod === 'ai' ? 'default' : 'outline'}
+                          onClick={() => setEnhancementMethod('ai')}
+                          className="w-full"
+                        >
+                          AI Unblur
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={enhancementMethod === 'non-ai' ? 'default' : 'outline'}
+                          onClick={() => setEnhancementMethod('non-ai')}
+                          className="w-full"
+                        >
+                          {onnxModelLoaded ? 'NAFNet ML' : 'Sharp.js'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Sharpness slider only for non-AI method without ONNX */}
+                      {enhancementMethod === 'non-ai' && !onnxModelLoaded && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -750,8 +779,15 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
 
                     <div className="rounded-lg p-2 border bg-purple-50 border-purple-200">
                       <h3 className="font-semibold text-purple-900 text-xs">
-                        {onnxModelLoaded ? 'NAFNet ML Enhancement' : 'Sharp.js Enhancement'}
+                        {enhancementMethod === 'ai' ? 'Gemini AI Enhancement' : (onnxModelLoaded ? 'NAFNet ML Enhancement' : 'Sharp.js Enhancement')}
                       </h3>
+                      <p className="text-xs text-purple-700 mt-1">
+                        {enhancementMethod === 'ai'
+                          ? 'Uses Google Gemini AI to intelligently reduce blur and enhance image clarity'
+                          : (onnxModelLoaded
+                              ? 'Uses client-side NAFNet model for local ML-powered enhancement'
+                              : 'Uses Sharp.js for fast, traditional sharpening filters')}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -1031,7 +1067,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         transition={{ duration: 0.5, delay: 0.6 }}
         className="text-center mt-4 text-gray-500 text-xs"
       >
-        <p>NAFNet ML / Sharp.js Enhancement • Supports JPEG, PNG, WebP and SVG</p>
+        <p>Gemini AI / NAFNet ML / Sharp.js Enhancement • Supports JPEG, PNG, WebP and SVG</p>
       </motion.footer>
 
       {/* Format Download Dialog */}

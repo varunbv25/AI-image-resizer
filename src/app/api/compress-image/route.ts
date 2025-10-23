@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic';
 // Note: Body size limit configured in next.config.js (100MB)
 
 interface CompressImageRequestBody {
-  imageData: string;
+  imageData?: string; // Base64 data (legacy)
+  blobUrl?: string; // Vercel Blob URL (new)
   maxFileSizePercent?: number;
   maxFileSizeKB?: number;
   quality?: number;
@@ -78,15 +79,27 @@ export async function POST(req: NextRequest) {
   try {
     // Use custom JSON parser to support large payloads (up to 100MB)
     const body = await parseJsonBody<CompressImageRequestBody>(req);
-    const { imageData, maxFileSizePercent, maxFileSizeKB, quality: userQuality, originalSize } = body;
+    const { imageData, blobUrl, maxFileSizePercent, maxFileSizeKB, quality: userQuality, originalSize } = body;
 
-    if (!imageData) {
-      throw new Error('No image data provided');
+    let buffer: Buffer;
+
+    // Support both blob URL and legacy base64 data
+    if (blobUrl) {
+      // Fetch image from Vercel Blob
+      console.log('Fetching image from blob:', blobUrl);
+      const blobResponse = await fetch(blobUrl);
+      if (!blobResponse.ok) {
+        throw new Error('Failed to fetch image from blob storage');
+      }
+      const arrayBuffer = await blobResponse.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else if (imageData) {
+      // Legacy: Convert base64 to buffer
+      const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
+      buffer = Buffer.from(base64Data, 'base64');
+    } else {
+      throw new Error('No image data or blob URL provided');
     }
-
-    // Convert base64 to buffer
-    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
 
     const sharp = (await import('sharp')).default;
 
@@ -170,6 +183,18 @@ export async function POST(req: NextRequest) {
     const base64Image = finalBuffer.toString('base64');
     const mimeType = `image/${format === 'jpg' ? 'jpeg' : format}`;
     const compressedImageData = `data:${mimeType};base64,${base64Image}`;
+
+    // Clean up blob if it was used
+    if (blobUrl) {
+      try {
+        const { del } = await import('@vercel/blob');
+        await del(blobUrl);
+        console.log('Cleaned up blob:', blobUrl);
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup blob:', cleanupError);
+        // Don't fail the request if cleanup fails
+      }
+    }
 
     const response: APIResponse = {
       success: true,

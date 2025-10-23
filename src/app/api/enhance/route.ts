@@ -54,9 +54,15 @@ export async function POST(req: NextRequest) {
 
       case 'ai':
       default:
-        // AI enhancement has been removed, using Sharp.js sharpening instead
-        console.log('AI enhancement removed, using Sharp.js sharpening');
-        enhancedImage = await processor.sharpenImage(imageBuffer, format, sharpness);
+        // Use Gemini AI for enhancement (requires API key)
+        try {
+          console.log('Using Gemini AI for image enhancement...');
+          enhancedImage = await processor.enhanceImageWithAI(imageBuffer, format);
+        } catch (aiError) {
+          // Fallback to Sharp.js if AI fails
+          console.log('AI enhancement failed, falling back to Sharp.js:', aiError);
+          enhancedImage = await processor.sharpenImage(imageBuffer, format, sharpness);
+        }
         break;
     }
 
