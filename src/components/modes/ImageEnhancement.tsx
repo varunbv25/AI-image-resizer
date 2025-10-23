@@ -123,9 +123,9 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     setBatchProcessingStarted(false);
 
     const preparedFiles = await prepareFilesForBatchUpload(files, {
-      maxSizeMB: 3,
-      maxWidthOrHeight: 4096,
-      quality: 0.8,
+      maxSizeMB: 2,
+      maxWidthOrHeight: 3072,
+      quality: 0.75,
     });
 
     setUploadedFiles(preparedFiles);
