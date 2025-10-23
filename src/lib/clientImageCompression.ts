@@ -21,7 +21,7 @@ export async function compressImage(
   options: CompressionOptions = {}
 ): Promise<File> {
   const {
-    maxSizeMB = 3, // Default max 3MB (safe for most platforms)
+    maxSizeMB = 2, // Default max 2MB (accounts for 33% Base64 overhead → ~2.66MB)
     maxWidthOrHeight = 4096, // Max dimension
     quality = 0.8, // 80% quality
   } = options;

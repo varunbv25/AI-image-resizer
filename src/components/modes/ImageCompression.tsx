@@ -8,7 +8,7 @@ import { Slider } from '@/components/ui/slider';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { BatchItem } from '@/components/BatchProcessor';
-import { useFileUploadWithBlob } from '@/hooks/useFileUploadWithBlob';
+import { useFileUpload } from '@/hooks/useFileUpload';
 import { Download, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
@@ -68,13 +68,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
   const {
     isUploading,
-    uploadProgress,
     uploadedImage,
     error: uploadError,
     validationError,
     uploadFile,
     reset: resetUpload,
-  } = useFileUploadWithBlob();
+  } = useFileUpload();
 
   // Auto-load pre-uploaded files
   useEffect(() => {
@@ -116,10 +115,11 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     setBatchProcessingStarted(false);
 
     // Compress files before storing (prevents payload size errors)
+    // 2MB threshold accounts for 33% Base64 overhead (2MB → ~2.66MB)
     const preparedFiles = await prepareFilesForBatchUpload(files, {
-      maxSizeMB: 3,
-      maxWidthOrHeight: 4096,
-      quality: 0.8,
+      maxSizeMB: 2,
+      maxWidthOrHeight: 3072,
+      quality: 0.75,
     });
 
     // Store prepared (compressed if needed) files
@@ -173,21 +173,17 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       ));
 
       try {
-        // Upload to blob first
-        const { upload } = await import('@vercel/blob/client');
-        const blob = await upload(file.name, file, {
-          access: 'public',
-          handleUploadUrl: '/api/blob/upload-token',
-        });
+        // Read file as base64
+        const base64 = await fileToBase64(file);
 
-        // Compress image using blob URL
+        // Compress image
         const response = await fetch('/api/compress-image', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            blobUrl: blob.url,
+            imageData: base64,
             maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
             maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
             quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
@@ -249,21 +245,17 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     ));
 
     try {
-      // Upload to blob first
-      const { upload } = await import('@vercel/blob/client');
-      const blob = await upload(file.name, file, {
-        access: 'public',
-        handleUploadUrl: '/api/blob/upload-token',
-      });
+      // Read file as base64
+      const base64 = await fileToBase64(file);
 
-      // Compress image using blob URL
+      // Compress image
       const response = await fetch('/api/compress-image', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          blobUrl: blob.url,
+          imageData: base64,
           maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
           maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
           quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
@@ -497,8 +489,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          blobUrl: uploadedImage.blobUrl, // Use blob URL instead of base64
-          imageData: !uploadedImage.blobUrl ? uploadedImage.imageData : undefined, // Fallback to base64 if no blob
+          imageData: uploadedImage.imageData,
           maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
           maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
           quality: compressionMode === 'quality' ? quality : undefined,
