@@ -38,16 +38,17 @@ export function useFileUpload() {
       console.log(`Original file size: ${formatFileSize(originalSize)}`);
 
       // Compress image before upload to prevent payload size errors
-      // Max 3MB to ensure compatibility with most platforms (Vercel 4.5MB limit)
-      // Base64 encoding adds ~33% overhead, so 3MB file → ~4MB base64
+      // Max 2MB to ensure compatibility with most platforms (Vercel 4.5MB limit)
+      // Base64 encoding adds ~33% overhead, so 2MB file → ~2.7MB base64
+      // This leaves headroom for JSON overhead and processing
       let fileToUpload = file;
 
-      if (originalSize > 3 * 1024 * 1024) { // If larger than 3MB
+      if (originalSize > 2 * 1024 * 1024) { // If larger than 2MB
         console.log('Compressing image before upload...');
         fileToUpload = await compressImage(file, {
-          maxSizeMB: 3,
-          maxWidthOrHeight: 4096,
-          quality: 0.8,
+          maxSizeMB: 2,
+          maxWidthOrHeight: 3072,
+          quality: 0.75,
         });
 
         const compressedSize = fileToUpload.size;

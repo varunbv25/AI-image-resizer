@@ -20,9 +20,9 @@ export async function prepareFileForBatchUpload(
   } = {}
 ): Promise<File> {
   const {
-    maxSizeMB = 3,
-    maxWidthOrHeight = 4096,
-    quality = 0.8,
+    maxSizeMB = 2,
+    maxWidthOrHeight = 3072,
+    quality = 0.75,
   } = options;
 
   const originalSize = file.size;
@@ -78,7 +78,7 @@ export async function prepareFilesForBatchUpload(
       `[Batch] Total compression: ${formatFileSize(totalOriginalSize)} → ${formatFileSize(totalPreparedSize)} (${totalRatio}% reduction)`
     );
   } else {
-    console.log(`[Batch] No compression needed - all files under ${options.maxSizeMB || 3}MB`);
+    console.log(`[Batch] No compression needed - all files under ${options.maxSizeMB || 2}MB`);
   }
 
   return preparedFiles;

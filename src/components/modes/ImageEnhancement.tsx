@@ -377,6 +377,15 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         }),
       });
 
+      // Check for HTTP errors (like 413 Payload Too Large)
+      if (!response.ok) {
+        const statusText = response.statusText || 'Request failed';
+        if (response.status === 413) {
+          throw new Error('Request Entity Too Large - Image is too large to process');
+        }
+        throw new Error(`HTTP ${response.status}: ${statusText}`);
+      }
+
       const result = await response.json();
 
       if (!result.success) {
@@ -406,7 +415,20 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         progress: 0,
         message: ''
       });
-      alert(error instanceof Error ? error.message : 'Enhancement failed');
+
+      // Check for payload size errors
+      let errorMessage = error instanceof Error ? error.message : 'Enhancement failed';
+      if (errorMessage.includes('FUNCTION_PAYLOAD_TOO_LARGE') ||
+          errorMessage.includes('Request Entity Too Large') ||
+          errorMessage.includes('too large')) {
+        errorMessage = 'Image file is too large to process. Please:\n\n' +
+                      '1. Use a smaller image (under 2MB recommended)\n' +
+                      '2. Reduce image dimensions before uploading\n' +
+                      '3. Try compressing the image first using the Image Compression mode\n\n' +
+                      'The image has been automatically compressed during upload, but it may still be too large for processing.';
+      }
+
+      alert(errorMessage);
     } finally {
       setIsProcessing(false);
     }
