@@ -13,6 +13,7 @@ import { Download, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
+import { compressImageClientSide, downloadBlob } from '@/lib/clientSideCompression';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
@@ -65,6 +66,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   const comparisonRef = useRef<HTMLDivElement>(null);
   const originalImageRef = useRef<HTMLImageElement>(null);
   const batchComparisonRef = useRef<HTMLDivElement>(null);
+  const originalFileRef = useRef<File | null>(null);
 
   const {
     isUploading,
@@ -91,6 +93,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   }, []);
 
   const handleImageUpload = (file: File) => {
+    originalFileRef.current = file; // Store original file for client-side processing
     uploadFile(file);
     setCompressedImage(null);
     setCompressionError('');
@@ -477,38 +480,34 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   };
 
   const handleCompress = async () => {
-    if (!uploadedImage) return;
+    if (!uploadedImage || !originalFileRef.current) return;
 
     setIsCompressing(true);
     setCompressionError('');
 
     try {
-      const response = await fetch('/api/compress-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageData: uploadedImage.imageData,
-          maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
-          maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
-          quality: compressionMode === 'quality' ? quality : undefined,
-          originalSize: uploadedImage.size,
-        }),
+      console.log('🚀 Starting CLIENT-SIDE compression (no server!)');
+      console.log('Original size:', (originalFileRef.current.size / 1024 / 1024).toFixed(2), 'MB');
+
+      // 100% CLIENT-SIDE COMPRESSION - NO SERVER!
+      const result = await compressImageClientSide(originalFileRef.current, {
+        maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
+        maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
+        quality: compressionMode === 'quality' ? quality / 100 : undefined,
+        format: 'jpeg',
       });
 
-      const result = await safeJsonParse(response);
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Compression failed');
-      }
+      console.log('✅ Compressed size:', (result.size / 1024 / 1024).toFixed(2), 'MB');
+      console.log('✅ Compression ratio:', result.compressionRatio, '%');
+      console.log('✅ NO SERVER COMMUNICATION - Processed 100% in browser!');
 
       setCompressedImage({
-        imageData: result.data.imageData,
-        size: result.data.size,
-        compressionRatio: result.data.compressionRatio,
+        imageData: result.dataUrl,
+        size: result.size,
+        compressionRatio: result.compressionRatio,
       });
     } catch (error) {
+      console.error('❌ Client-side compression error:', error);
       setCompressionError(
         error instanceof Error ? error.message : 'Compression failed'
       );
