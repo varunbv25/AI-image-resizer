@@ -9,7 +9,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { DimensionSelector } from '@/components/DimensionSelector';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { ImageDimensions } from '@/types';
-import { Download, Scissors, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
+import { Download, RotateCcw, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
 import Image from 'next/image';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import JSZip from 'jszip';
@@ -348,6 +348,13 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
     document.body.removeChild(link);
   };
 
+  const handleReset = () => {
+    batchItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+    setBatchItems([]);
+    setSelectedImageId(null);
+    setTotalCompleted(0);
+  };
+
   const selectedItem = selectedImageId ? batchItems.find(i => i.id === selectedImageId) : null;
   const completedCount = batchItems.filter(i => i.status === 'completed').length;
 
@@ -466,8 +473,12 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
         >
           <Card>
             <CardHeader>
-              <CardTitle>
-                Images ({batchItems.length})
+              <CardTitle className="flex items-center justify-between">
+                <span>Images ({batchItems.length})</span>
+                <Button variant="outline" size="sm" onClick={handleReset}>
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -602,21 +613,12 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
                   </CardHeader>
                   <CardContent>
                     <Button
-                      onClick={() => {
-                        if (selectedItem.status === 'completed') {
-                          // Reset to allow retry
-                          setBatchItems(prev => prev.map(i =>
-                            i.id === selectedItem.id ? { ...i, status: 'pending' as const, croppedData: undefined, croppedSize: undefined } : i
-                          ));
-                        } else {
-                          handleCropImage();
-                        }
-                      }}
-                      disabled={isProcessing}
+                      onClick={handleCropImage}
+                      disabled={isProcessing || selectedItem.status === 'completed'}
                       className="w-full bg-green-600 hover:bg-green-700"
                     >
                       <Scissors className="h-4 w-4 mr-2" />
-                      {selectedItem.status === 'completed' ? 'Retry' : 'Crop This Image'}
+                      {selectedItem.status === 'completed' ? 'Cropped ✓' : 'Crop This Image'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -818,6 +820,25 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
       updateCropFrameForDimensions(targetDimensions, imageDisplay);
     }
   }, [isDimensionSelected, imageDisplay, targetDimensions, updateCropFrameForDimensions]);
+
+  const handleReset = useCallback(() => {
+    resetUpload();
+    setCroppedImageUrl(null);
+    setIsDimensionSelected(false);
+    setCropFrame({
+      x: 100,
+      y: 100,
+      width: 300,
+      height: 300,
+    });
+    setImageDisplay({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      scale: 1,
+    });
+  }, [resetUpload]);
 
   const handleCrop = useCallback(async () => {
     if (!uploadedImage || !canvasRef.current || !imageDisplay) {
@@ -1175,6 +1196,13 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
 
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
+        case 'r':
+        case 'R':
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            handleReset();
+          }
+          break;
         case ' ':
           e.preventDefault();
           if (!isProcessing) {
@@ -1217,7 +1245,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [uploadedImage, isProcessing, handleCrop, imageDisplay]);
+  }, [uploadedImage, isProcessing, handleReset, handleCrop, imageDisplay]);
 
   const handleDimensionsChange = (dimensions: ImageDimensions) => {
     setTargetDimensions(dimensions);
@@ -1544,7 +1572,13 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                 >
                   <Card className="border-0 shadow-lg">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Image Info</CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">Image Info</CardTitle>
+                        <Button variant="outline" size="sm" onClick={handleReset} className="h-8">
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          Reset
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div>
@@ -1621,19 +1655,12 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                     </Button>
                   ) : (
                     <Button
-                      onClick={() => {
-                        if (croppedImageUrl) {
-                          // Reset to allow retry
-                          setCroppedImageUrl(null);
-                          setCroppedImageData(null);
-                        } else {
-                          handleCrop();
-                        }
-                      }}
+                      onClick={handleCrop}
+                      disabled={!!croppedImageUrl}
                       className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
                     >
                       {croppedImageUrl ? (
-                        <>Retry</>
+                        <>Cropped ✓</>
                       ) : (
                         <>
                           <Scissors className="h-4 w-4 mr-2" />

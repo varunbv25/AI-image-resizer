@@ -9,7 +9,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
+import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
@@ -575,6 +575,22 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     }
   };
 
+  const handleReset = () => {
+    resetUpload();
+    setCompressedImage(null);
+    setCompressionError('');
+    setMaxFileSize(40);
+    setQuality(80);
+    setMaxFileSizeKB(500);
+    setCompressionMode('quality');
+    setComparisonPosition(50);
+    setIsBatchMode(false);
+    setBatchItems([]);
+    setUploadedFiles([]);
+    setSelectedImageId(null);
+    setBatchProcessingStarted(false);
+  };
+
   const handleDownloadAll = async () => {
     const completedItems = batchItems.filter(item => item.status === 'completed' && item.processedData);
 
@@ -886,8 +902,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
             >
               <Card>
                 <CardHeader>
-                  <CardTitle>
-                    Images ({batchItems.length})
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Images ({batchItems.length})</span>
+                    <Button variant="outline" size="sm" onClick={handleReset}>
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1235,7 +1255,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
                       {/* Process This Image Button */}
                       <AnimatePresence>
-                        {(selectedItem.status === 'pending' || selectedItem.status === 'completed') && (
+                        {selectedItem.status === 'pending' && (
                           <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -1243,19 +1263,10 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                             transition={{ duration: 0.2 }}
                           >
                             <Button
-                              onClick={() => {
-                                if (selectedItem.status === 'completed') {
-                                  // Reset to allow retry
-                                  setBatchItems(prev => prev.map(i =>
-                                    i.id === selectedItem.id ? { ...i, status: 'pending' as const, processedData: undefined, processedSize: undefined } : i
-                                  ));
-                                } else {
-                                  processSingleImage(selectedImageId);
-                                }
-                              }}
+                              onClick={() => processSingleImage(selectedImageId)}
                               className="w-full bg-orange-600 hover:bg-orange-700"
                             >
-                              {selectedItem.status === 'completed' ? 'Retry' : 'Compress This Image'}
+                              Compress This Image
                             </Button>
                           </motion.div>
                         )}
@@ -1333,8 +1344,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           >
             <Card>
                 <CardHeader>
-                  <CardTitle>
+                  <CardTitle className="flex items-center justify-between">
                     Image Uploaded
+                    <Button variant="outline" size="sm" onClick={handleReset}>
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1463,19 +1478,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
               </div>
             ) : (
               <Button
-                onClick={() => {
-                  if (compressedImage) {
-                    // Reset to allow retry
-                    setCompressedImage(null);
-                    setCompressionError('');
-                  } else {
-                    handleCompress();
-                  }
-                }}
+                onClick={handleCompress}
+                disabled={!!compressedImage}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 size="lg"
               >
-                {compressedImage ? 'Retry' : 'Apply Compression'}
+                {compressedImage ? 'Already Compressed ✓' : 'Apply Compression'}
               </Button>
             )}
 
@@ -1730,7 +1738,6 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           currentFormat="jpeg"
           imageData={compressedImage.imageData}
           filename={uploadedImage.filename}
-          hideQualitySlider={true}
         />
       )}
 
@@ -1746,7 +1753,6 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           currentFormat="jpeg"
           imageData={batchItems.find(i => i.id === selectedDownloadId)?.processedData || ''}
           filename={batchItems.find(i => i.id === selectedDownloadId)?.filename || 'image'}
-          hideQualitySlider={true}
         />
       )}
 
