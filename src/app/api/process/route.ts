@@ -161,6 +161,10 @@ export async function POST(req: NextRequest) {
         const body = await parseJsonBody<ProcessRequestBody>(req);
         const { imageData, targetDimensions, quality = 80, format = 'jpeg' } = body;
 
+        if (!imageData) {
+          throw new Error('imageData is required');
+        }
+
         const imageBuffer = Buffer.from(imageData, 'base64');
         const processor = new ImageProcessor(); // No API key for fallback - uses crop only
         const originalDimensions = await processor.getImageDimensions(imageBuffer);

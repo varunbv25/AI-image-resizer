@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { handleUpload } from '@vercel/blob/client';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 
 export const runtime = 'edge';
 
@@ -9,19 +9,18 @@ export const runtime = 'edge';
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = await request.json();
-    const { filename } = body;
-
-    if (!filename) {
+    // Check if body exists
+    if (!request.body) {
       return NextResponse.json(
-        { error: 'Filename is required' },
+        { error: 'Request body is required' },
         { status: 400 }
       );
     }
 
     // Generate a client upload token
+    // Note: handleUpload reads the request body internally
     const jsonResponse = await handleUpload({
-      body: request.body,
+      body: request.body as unknown as HandleUploadBody,
       request,
       onBeforeGenerateToken: async (pathname: string) => {
         // Validate file type from pathname
