@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
+import { upload } from '@vercel/blob/client';
 
 interface ImageCompressionProps {
   onBack: () => void;
@@ -550,28 +551,87 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     setCompressionError('');
 
     try {
-      console.log('🚀 Starting CLIENT-SIDE compression (no server!)');
-      console.log('Original size:', (originalFileRef.current.size / 1024 / 1024).toFixed(2), 'MB');
+      const originalFile = originalFileRef.current;
+      console.log('Original size:', (originalFile.size / 1024 / 1024).toFixed(2), 'MB');
 
-      // 100% CLIENT-SIDE COMPRESSION - NO SERVER!
-      const result = await compressImageClientSide(originalFileRef.current, {
-        maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
-        maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
-        quality: compressionMode === 'quality' ? quality / 100 : undefined,
-        format: 'jpeg',
-      });
+      // Check if we should use blob workflow (file > 3MB)
+      const SIZE_THRESHOLD = 3 * 1024 * 1024; // 3MB
+      const usesBlobWorkflow = originalFile.size > SIZE_THRESHOLD;
 
-      console.log('✅ Compressed size:', (result.size / 1024 / 1024).toFixed(2), 'MB');
-      console.log('✅ Compression ratio:', result.compressionRatio, '%');
-      console.log('✅ NO SERVER COMMUNICATION - Processed 100% in browser!');
+      if (usesBlobWorkflow) {
+        // BLOB WORKFLOW for large files
+        console.log('🚀 Using blob workflow with server-side sharp.js for large file');
 
-      setCompressedImage({
-        imageData: result.dataUrl,
-        size: result.size,
-        compressionRatio: result.compressionRatio,
-      });
+        // Step 1: Upload file to Vercel Blob
+        const blob = await upload(originalFile.name, originalFile, {
+          access: 'public',
+          handleUploadUrl: '/api/get-upload-token',
+          multipart: true,
+        });
+
+        console.log('File uploaded to blob:', blob.url);
+
+        // Step 2: Request processing with blob URL
+        const targetSizeKB = compressionMode === 'filesize'
+          ? maxFileSizeKB
+          : Math.round((originalFile.size / 1024) * (maxFileSize / 100));
+
+        const response = await fetch('/api/process-from-blob', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            operation: 'compress',
+            params: {
+              targetSizeKB,
+              quality: compressionMode === 'quality' ? quality : undefined,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Compression processing failed');
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          const compressedSize = Buffer.from(result.data.imageData, 'base64').length;
+          const compressionRatio = (compressedSize / originalFile.size) * 100;
+
+          console.log('✅ Compressed size:', (compressedSize / 1024 / 1024).toFixed(2), 'MB');
+          console.log('✅ Compression ratio:', compressionRatio.toFixed(1), '%');
+
+          setCompressedImage({
+            imageData: `data:${result.data.mimetype};base64,${result.data.imageData}`,
+            size: compressedSize,
+            compressionRatio: parseFloat(compressionRatio.toFixed(1)),
+          });
+        } else {
+          throw new Error(result.error || 'Processing failed');
+        }
+      } else {
+        // CLIENT-SIDE COMPRESSION for small files
+        console.log('🚀 Using client-side compression for small file');
+
+        const result = await compressImageClientSide(originalFile, {
+          maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
+          maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
+          quality: compressionMode === 'quality' ? quality / 100 : undefined,
+          format: 'jpeg',
+        });
+
+        console.log('✅ Compressed size:', (result.size / 1024 / 1024).toFixed(2), 'MB');
+        console.log('✅ Compression ratio:', result.compressionRatio, '%');
+
+        setCompressedImage({
+          imageData: result.dataUrl,
+          size: result.size,
+          compressionRatio: result.compressionRatio,
+        });
+      }
     } catch (error) {
-      console.error('❌ Client-side compression error:', error);
+      console.error('❌ Compression error:', error);
       setCompressionError(
         error instanceof Error ? error.message : 'Compression failed'
       );

@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
+import { upload } from '@vercel/blob/client';
 
 interface ManualCroppingProps {
   onBack: () => void;
@@ -688,6 +689,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
   const [isConverting, setIsConverting] = useState(false);
   const [croppedImageData, setCroppedImageData] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -705,12 +707,14 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
   // Auto-upload pre-uploaded file
   useEffect(() => {
     if (preUploadedFile && !uploadedImage) {
+      setOriginalFile(preUploadedFile);
       uploadFile(preUploadedFile);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleImageUpload = (file: File) => {
+    setOriginalFile(file);
     uploadFile(file);
     setCroppedImageUrl(null);
   };
@@ -851,125 +855,178 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     setIsProcessing(true);
 
     try {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        console.error('Could not get canvas context');
-        setIsProcessing(false);
-        return;
-      }
-
       // Calculate crop coordinates relative to the original image
       const cropX = (cropFrame.x - imageDisplay.x) / imageDisplay.scale;
       const cropY = (cropFrame.y - imageDisplay.y) / imageDisplay.scale;
       const cropWidth = cropFrame.width / imageDisplay.scale;
       const cropHeight = cropFrame.height / imageDisplay.scale;
 
-      console.log('Crop coordinates:', { cropX, cropY, cropWidth, cropHeight });
-      console.log('Image display:', imageDisplay);
-      console.log('Crop frame:', cropFrame);
-      console.log('Is dimension selected:', isDimensionSelected);
-
-      // Set canvas dimensions - use target dimensions if selected, otherwise use actual crop size
+      // Set output dimensions - use target dimensions if selected, otherwise use actual crop size
       const outputWidth = isDimensionSelected ? targetDimensions.width : Math.round(cropWidth);
       const outputHeight = isDimensionSelected ? targetDimensions.height : Math.round(cropHeight);
 
-      canvas.width = outputWidth;
-      canvas.height = outputHeight;
+      // Validate crop coordinates
+      const validCropX = Math.round(Math.max(0, cropX));
+      const validCropY = Math.round(Math.max(0, cropY));
+      const maxCropWidth = uploadedImage.originalDimensions.width - validCropX;
+      const maxCropHeight = uploadedImage.originalDimensions.height - validCropY;
+      const validCropWidth = Math.round(Math.min(cropWidth, maxCropWidth));
+      const validCropHeight = Math.round(Math.min(cropHeight, maxCropHeight));
 
-      const img = new window.Image();
+      // Check if we should use blob workflow (file > 3MB)
+      const SIZE_THRESHOLD = 3 * 1024 * 1024; // 3MB
+      const usesBlobWorkflow = originalFile && originalFile.size > SIZE_THRESHOLD;
 
-      // Enable CORS for SVG images to prevent tainted canvas
-      if (uploadedImage.mimetype === 'image/svg+xml') {
-        img.crossOrigin = 'anonymous';
-      }
+      if (usesBlobWorkflow && originalFile) {
+        // BLOB WORKFLOW for large files
+        console.log('Using blob workflow for large file:', originalFile.size);
 
-      img.onload = async () => {
-        console.log('Image loaded successfully');
-
-        // For SVG, wait longer to ensure it's fully rendered
-        if (uploadedImage.mimetype === 'image/svg+xml') {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Set white background for transparency
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Ensure crop coordinates are within bounds and round to avoid subpixel issues
-        const validCropX = Math.round(Math.max(0, cropX));
-        const validCropY = Math.round(Math.max(0, cropY));
-
-        // Ensure crop width/height don't exceed image bounds
-        const maxCropWidth = uploadedImage.originalDimensions.width - validCropX;
-        const maxCropHeight = uploadedImage.originalDimensions.height - validCropY;
-        const validCropWidth = Math.round(Math.min(cropWidth, maxCropWidth));
-        const validCropHeight = Math.round(Math.min(cropHeight, maxCropHeight));
-
-        console.log('Final crop values:', {
-          validCropX,
-          validCropY,
-          validCropWidth,
-          validCropHeight,
-          originalWidth: uploadedImage.originalDimensions.width,
-          originalHeight: uploadedImage.originalDimensions.height,
-          imgNaturalWidth: img.naturalWidth,
-          imgNaturalHeight: img.naturalHeight
+        // Step 1: Upload file to Vercel Blob
+        const blob = await upload(originalFile.name, originalFile, {
+          access: 'public',
+          handleUploadUrl: '/api/get-upload-token',
+          multipart: true,
         });
 
-        // For SVG, use the natural dimensions from the loaded image
-        const sourceWidth = img.naturalWidth || uploadedImage.originalDimensions.width;
-        const sourceHeight = img.naturalHeight || uploadedImage.originalDimensions.height;
+        console.log('File uploaded to blob:', blob.url);
 
-        // Calculate the scale factor between original dimensions and natural dimensions
-        const scaleX = sourceWidth / uploadedImage.originalDimensions.width;
-        const scaleY = sourceHeight / uploadedImage.originalDimensions.height;
+        // Step 2: Request processing with blob URL
+        const response = await fetch('/api/process-from-blob', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            operation: 'crop',
+            params: {
+              cropArea: {
+                x: validCropX,
+                y: validCropY,
+                width: validCropWidth,
+                height: validCropHeight,
+              },
+              targetWidth: outputWidth,
+              targetHeight: outputHeight,
+            },
+          }),
+        });
 
-        // Adjust crop coordinates for SVG scaling
-        const adjustedCropX = validCropX * scaleX;
-        const adjustedCropY = validCropY * scaleY;
-        const adjustedCropWidth = validCropWidth * scaleX;
-        const adjustedCropHeight = validCropHeight * scaleY;
+        if (!response.ok) {
+          throw new Error('Crop processing failed');
+        }
 
-        // Draw the cropped portion to the canvas
-        ctx.drawImage(
-          img,
-          adjustedCropX,
-          adjustedCropY,
-          adjustedCropWidth,
-          adjustedCropHeight,
-          0,
-          0,
-          outputWidth,
-          outputHeight
-        );
+        const result = await response.json();
 
-        canvas.toBlob(async (blob) => {
-          if (blob) {
-            try {
-              const formData = new FormData();
-              formData.append('image', blob, 'cropped-image.jpg');
-              formData.append('quality', '85');
-              formData.append('format', 'jpg');
+        if (result.success) {
+          // Create blob URL for preview
+          const processedBlob = new Blob(
+            [Buffer.from(result.data.imageData, 'base64')],
+            { type: result.data.mimetype }
+          );
+          const url = URL.createObjectURL(processedBlob);
+          setCroppedImageUrl(url);
+          setCroppedImageData(result.data.imageData);
+        } else {
+          throw new Error(result.error || 'Processing failed');
+        }
 
-              const response = await fetch('/api/compress', {
-                method: 'POST',
-                body: formData,
-              });
+        setIsProcessing(false);
+      } else {
+        // TRADITIONAL CANVAS WORKFLOW for small files
+        console.log('Using canvas workflow for small file');
 
-              const result = await safeJsonParse(response);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          console.error('Could not get canvas context');
+          setIsProcessing(false);
+          return;
+        }
 
-              if (result.success) {
-                const compressedBlob = new Blob(
-                  [Buffer.from(result.data.imageData, 'base64')],
-                  { type: result.data.mimetype }
-                );
-                const url = URL.createObjectURL(compressedBlob);
-                setCroppedImageUrl(url);
-                setCroppedImageData(result.data.imageData);
-              } else {
+        canvas.width = outputWidth;
+        canvas.height = outputHeight;
+
+        const img = new window.Image();
+
+        // Enable CORS for SVG images to prevent tainted canvas
+        if (uploadedImage.mimetype === 'image/svg+xml') {
+          img.crossOrigin = 'anonymous';
+        }
+
+        img.onload = async () => {
+          // For SVG, wait longer to ensure it's fully rendered
+          if (uploadedImage.mimetype === 'image/svg+xml') {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Set white background for transparency
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // For SVG, use the natural dimensions from the loaded image
+          const sourceWidth = img.naturalWidth || uploadedImage.originalDimensions.width;
+          const sourceHeight = img.naturalHeight || uploadedImage.originalDimensions.height;
+
+          // Calculate the scale factor between original dimensions and natural dimensions
+          const scaleX = sourceWidth / uploadedImage.originalDimensions.width;
+          const scaleY = sourceHeight / uploadedImage.originalDimensions.height;
+
+          // Adjust crop coordinates for SVG scaling
+          const adjustedCropX = validCropX * scaleX;
+          const adjustedCropY = validCropY * scaleY;
+          const adjustedCropWidth = validCropWidth * scaleX;
+          const adjustedCropHeight = validCropHeight * scaleY;
+
+          // Draw the cropped portion to the canvas
+          ctx.drawImage(
+            img,
+            adjustedCropX,
+            adjustedCropY,
+            adjustedCropWidth,
+            adjustedCropHeight,
+            0,
+            0,
+            outputWidth,
+            outputHeight
+          );
+
+          canvas.toBlob(async (blob) => {
+            if (blob) {
+              try {
+                const formData = new FormData();
+                formData.append('image', blob, 'cropped-image.jpg');
+                formData.append('quality', '85');
+                formData.append('format', 'jpg');
+
+                const response = await fetch('/api/compress', {
+                  method: 'POST',
+                  body: formData,
+                });
+
+                const result = await safeJsonParse(response);
+
+                if (result.success) {
+                  const compressedBlob = new Blob(
+                    [Buffer.from(result.data.imageData, 'base64')],
+                    { type: result.data.mimetype }
+                  );
+                  const url = URL.createObjectURL(compressedBlob);
+                  setCroppedImageUrl(url);
+                  setCroppedImageData(result.data.imageData);
+                } else {
+                  const url = URL.createObjectURL(blob);
+                  setCroppedImageUrl(url);
+                  // Convert blob to base64 for fallback
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const base64 = (reader.result as string).split(',')[1];
+                    setCroppedImageData(base64);
+                  };
+                  reader.readAsDataURL(blob);
+                }
+              } catch (compressionError) {
+                console.warn('Compression failed, using original:', compressionError);
                 const url = URL.createObjectURL(blob);
                 setCroppedImageUrl(url);
                 // Convert blob to base64 for fallback
@@ -980,34 +1037,23 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                 };
                 reader.readAsDataURL(blob);
               }
-            } catch (compressionError) {
-              console.warn('Compression failed, using original:', compressionError);
-              const url = URL.createObjectURL(blob);
-              setCroppedImageUrl(url);
-              // Convert blob to base64 for fallback
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = (reader.result as string).split(',')[1];
-                setCroppedImageData(base64);
-              };
-              reader.readAsDataURL(blob);
             }
-          }
+            setIsProcessing(false);
+          }, 'image/jpeg', 0.9);
+        };
+
+        img.onerror = (error) => {
+          console.error('Image failed to load:', error);
           setIsProcessing(false);
-        }, 'image/jpeg', 0.9);
-      };
+        };
 
-      img.onerror = (error) => {
-        console.error('Image failed to load:', error);
-        setIsProcessing(false);
-      };
-
-      img.src = `data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`;
+        img.src = `data:${uploadedImage.mimetype};base64,${uploadedImage.imageData}`;
+      }
     } catch (error) {
       console.error('Error cropping image:', error);
       setIsProcessing(false);
     }
-  }, [uploadedImage, targetDimensions, cropFrame, imageDisplay, isDimensionSelected]);
+  }, [uploadedImage, targetDimensions, cropFrame, imageDisplay, isDimensionSelected, originalFile]);
 
   // Handle crop frame movement
   const handleFrameMouseDown = useCallback((e: React.MouseEvent) => {

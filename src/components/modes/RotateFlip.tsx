@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -17,6 +17,7 @@ import { RotateFlipSettings } from '@/types';
 import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
+import { upload } from '@vercel/blob/client';
 
 interface ImageMetadata {
   width: number;
@@ -62,6 +63,8 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
   const [selectedDownloadId, setSelectedDownloadId] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
+  const originalFileRef = useRef<File | null>(null);
+
   const {
     isUploading,
     uploadedImage,
@@ -78,6 +81,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
       if (preUploadedFiles.length > 1) {
         handleBatchImageUpload(preUploadedFiles);
       } else {
+        originalFileRef.current = preUploadedFiles[0];
         uploadFile(preUploadedFiles[0]);
         setIsBatchMode(false);
       }
@@ -94,6 +98,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
   }, [uploadedImage]);
 
   const handleImageUpload = (file: File) => {
+    originalFileRef.current = file;
     uploadFile(file);
     setProcessedImage(null);
     setIsBatchMode(false);
@@ -407,21 +412,68 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
         operation = 'custom';
       }
 
-      const response = await fetch('/api/rotate-flip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageData: uploadedImage.imageData,
-          operation: operation,
-          customAngle: totalAngle,
-          quality: Math.round(transformSettings.quality * 100),
-          format: 'jpeg',
-          flipHorizontal: flipHorizontal,
-          flipVertical: flipVertical,
-        }),
-      });
+      // Check if we should use blob workflow (file > 3MB)
+      const SIZE_THRESHOLD = 3 * 1024 * 1024; // 3MB
+      const originalFile = originalFileRef.current;
+      const usesBlobWorkflow = originalFile && originalFile.size > SIZE_THRESHOLD;
 
-      const result = await response.json();
+      let result;
+
+      if (usesBlobWorkflow && originalFile) {
+        // BLOB WORKFLOW for large files
+        console.log('🚀 Using blob workflow with server-side sharp.js for large file');
+
+        // Step 1: Upload file to Vercel Blob
+        const blob = await upload(originalFile.name, originalFile, {
+          access: 'public',
+          handleUploadUrl: '/api/get-upload-token',
+          multipart: true,
+        });
+
+        console.log('File uploaded to blob:', blob.url);
+
+        // Step 2: Request processing with blob URL
+        const response = await fetch('/api/process-from-blob', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            operation: 'rotate-flip',
+            params: {
+              operation,
+              customAngle: totalAngle,
+              quality: Math.round(transformSettings.quality * 100),
+              flipHorizontal,
+              flipVertical,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Processing failed');
+        }
+
+        result = await response.json();
+      } else {
+        // TRADITIONAL API WORKFLOW for small files
+        console.log('Using traditional API workflow for small file');
+
+        const response = await fetch('/api/rotate-flip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageData: uploadedImage.imageData,
+            operation: operation,
+            customAngle: totalAngle,
+            quality: Math.round(transformSettings.quality * 100),
+            format: 'jpeg',
+            flipHorizontal: flipHorizontal,
+            flipVertical: flipVertical,
+          }),
+        });
+
+        result = await response.json();
+      }
 
       if (!result.success) {
         throw new Error(result.error || 'Processing failed');
