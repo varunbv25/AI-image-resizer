@@ -114,10 +114,10 @@ export async function POST(req: NextRequest) {
 
       case 'compress': {
         const sharp = (await import('sharp')).default;
-        const { ImageProcessor } = await import('@/lib/imageProcessor');
 
-        const processor = new ImageProcessor();
-        const { maxFileSizePercent, maxFileSizeKB, quality = 80, format = 'jpeg' } = params;
+        const { quality = 80, format = 'jpeg' } = params;
+        // Note: maxFileSizePercent and maxFileSizeKB would be used for advanced compression
+        // For now, using basic quality-based compression
 
         // Similar to compress-image route logic
         const header = imageBuffer.slice(0, 100).toString('utf-8');
@@ -155,6 +155,90 @@ export async function POST(req: NextRequest) {
           width: compressedMetadata.width || 0,
           height: compressedMetadata.height || 0,
           format: format,
+          size: processedBuffer.length,
+        };
+        break;
+      }
+
+      case 'enhance': {
+        const { ImageProcessor } = await import('@/lib/imageProcessor');
+        const { method = 'sharp', sharpness = 5, format = 'jpeg', quality = 90 } = params;
+
+        const processor = new ImageProcessor(process.env.GEMINI_API_KEY);
+        const enhancedImage = method === 'ai'
+          ? await processor.enhanceImageWithAI(imageBuffer, format)
+          : await processor.sharpenImage(imageBuffer, format, sharpness);
+
+        const upscaledResult = await processor.autoUpscaleIfNeeded(enhancedImage);
+        processedBuffer = upscaledResult.buffer;
+
+        metadata = {
+          width: upscaledResult.metadata.width,
+          height: upscaledResult.metadata.height,
+          format: upscaledResult.metadata.format,
+          size: processedBuffer.length,
+        };
+        break;
+      }
+
+      case 'rotate-flip': {
+        const { ImageProcessor } = await import('@/lib/imageProcessor');
+        const {
+          rotateOperation = 'rotate-90',
+          customAngle = 0,
+          flipHorizontal = false,
+          flipVertical = false,
+          format = 'jpeg',
+          quality = 90,
+        } = params;
+
+        const processor = new ImageProcessor();
+        const result = await processor.rotateFlipImage(
+          imageBuffer,
+          rotateOperation,
+          customAngle,
+          format,
+          quality
+        );
+
+        // Apply flip transformations if needed
+        if (flipHorizontal || flipVertical) {
+          const sharp = (await import('sharp')).default;
+          let sharpInstance = sharp(result.buffer);
+
+          if (flipHorizontal) sharpInstance = sharpInstance.flop();
+          if (flipVertical) sharpInstance = sharpInstance.flip();
+
+          processedBuffer = await sharpInstance.toBuffer();
+        } else {
+          processedBuffer = result.buffer;
+        }
+
+        metadata = {
+          width: result.metadata.width,
+          height: result.metadata.height,
+          format: result.metadata.format,
+          size: processedBuffer.length,
+        };
+        break;
+      }
+
+      case 'convert-format': {
+        const { ImageProcessor } = await import('@/lib/imageProcessor');
+        const { targetFormat = 'jpeg', quality = 90 } = params;
+
+        if (!targetFormat) {
+          throw new Error('targetFormat is required for convert-format operation');
+        }
+
+        const processor = new ImageProcessor();
+        const convertedImage = await processor.convertFormat(imageBuffer, targetFormat, quality);
+
+        processedBuffer = convertedImage.buffer;
+        metadata = {
+          width: convertedImage.metadata.width,
+          height: convertedImage.metadata.height,
+          format: convertedImage.metadata.format,
           size: processedBuffer.length,
         };
         break;
