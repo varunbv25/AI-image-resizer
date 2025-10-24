@@ -9,10 +9,11 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
+import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
+import { compressImageClientSide, downloadBlob } from '@/lib/clientSideCompression';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
@@ -65,6 +66,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   const comparisonRef = useRef<HTMLDivElement>(null);
   const originalImageRef = useRef<HTMLImageElement>(null);
   const batchComparisonRef = useRef<HTMLDivElement>(null);
+  const originalFileRef = useRef<File | null>(null);
 
   const {
     isUploading,
@@ -92,6 +94,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   }, []);
 
   const handleImageUpload = (file: File) => {
+    originalFileRef.current = file; // Store original file for client-side processing
     uploadFile(file);
     setCompressedImage(null);
     setCompressionError('');
@@ -116,10 +119,11 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     setBatchProcessingStarted(false);
 
     // Compress files before storing (prevents payload size errors)
+    // 2MB threshold accounts for 33% Base64 overhead (2MB → ~2.66MB)
     const preparedFiles = await prepareFilesForBatchUpload(files, {
-      maxSizeMB: 3,
-      maxWidthOrHeight: 4096,
-      quality: 0.8,
+      maxSizeMB: 2,
+      maxWidthOrHeight: 3072,
+      quality: 0.75,
     });
 
     // Store prepared (compressed if needed) files
@@ -477,38 +481,34 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   };
 
   const handleCompress = async () => {
-    if (!uploadedImage) return;
+    if (!uploadedImage || !originalFileRef.current) return;
 
     setIsCompressing(true);
     setCompressionError('');
 
     try {
-      const response = await fetch('/api/compress-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageData: uploadedImage.imageData,
-          maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
-          maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
-          quality: compressionMode === 'quality' ? quality : undefined,
-          originalSize: uploadedImage.size,
-        }),
+      console.log('🚀 Starting CLIENT-SIDE compression (no server!)');
+      console.log('Original size:', (originalFileRef.current.size / 1024 / 1024).toFixed(2), 'MB');
+
+      // 100% CLIENT-SIDE COMPRESSION - NO SERVER!
+      const result = await compressImageClientSide(originalFileRef.current, {
+        maxFileSizePercent: compressionMode === 'quality' ? maxFileSize : undefined,
+        maxFileSizeKB: compressionMode === 'filesize' ? maxFileSizeKB : undefined,
+        quality: compressionMode === 'quality' ? quality / 100 : undefined,
+        format: 'jpeg',
       });
 
-      const result = await safeJsonParse(response);
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Compression failed');
-      }
+      console.log('✅ Compressed size:', (result.size / 1024 / 1024).toFixed(2), 'MB');
+      console.log('✅ Compression ratio:', result.compressionRatio, '%');
+      console.log('✅ NO SERVER COMMUNICATION - Processed 100% in browser!');
 
       setCompressedImage({
-        imageData: result.data.imageData,
-        size: result.data.size,
-        compressionRatio: result.data.compressionRatio,
+        imageData: result.dataUrl,
+        size: result.size,
+        compressionRatio: result.compressionRatio,
       });
     } catch (error) {
+      console.error('❌ Client-side compression error:', error);
       setCompressionError(
         error instanceof Error ? error.message : 'Compression failed'
       );
@@ -574,6 +574,22 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       console.error('Download error:', error);
       alert(error instanceof Error ? error.message : 'Download failed');
     }
+  };
+
+  const handleReset = () => {
+    resetUpload();
+    setCompressedImage(null);
+    setCompressionError('');
+    setMaxFileSize(40);
+    setQuality(80);
+    setMaxFileSizeKB(500);
+    setCompressionMode('quality');
+    setComparisonPosition(50);
+    setIsBatchMode(false);
+    setBatchItems([]);
+    setUploadedFiles([]);
+    setSelectedImageId(null);
+    setBatchProcessingStarted(false);
   };
 
   const handleDownloadAll = async () => {
@@ -888,8 +904,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
             >
               <Card>
                 <CardHeader>
-                  <CardTitle>
-                    Images ({batchItems.length})
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Images ({batchItems.length})</span>
+                    <Button variant="outline" size="sm" onClick={handleReset}>
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1237,7 +1257,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
                       {/* Process This Image Button */}
                       <AnimatePresence>
-                        {(selectedItem.status === 'pending' || selectedItem.status === 'completed') && (
+                        {selectedItem.status === 'pending' && (
                           <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -1245,19 +1265,10 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                             transition={{ duration: 0.2 }}
                           >
                             <Button
-                              onClick={() => {
-                                if (selectedItem.status === 'completed') {
-                                  // Reset to allow retry
-                                  setBatchItems(prev => prev.map(i =>
-                                    i.id === selectedItem.id ? { ...i, status: 'pending' as const, processedData: undefined, processedSize: undefined } : i
-                                  ));
-                                } else {
-                                  processSingleImage(selectedImageId);
-                                }
-                              }}
+                              onClick={() => processSingleImage(selectedImageId)}
                               className="w-full bg-orange-600 hover:bg-orange-700"
                             >
-                              {selectedItem.status === 'completed' ? 'Retry' : 'Compress This Image'}
+                              Compress This Image
                             </Button>
                           </motion.div>
                         )}
@@ -1335,8 +1346,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           >
             <Card>
                 <CardHeader>
-                  <CardTitle>
+                  <CardTitle className="flex items-center justify-between">
                     Image Uploaded
+                    <Button variant="outline" size="sm" onClick={handleReset}>
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1465,19 +1480,12 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
               </div>
             ) : (
               <Button
-                onClick={() => {
-                  if (compressedImage) {
-                    // Reset to allow retry
-                    setCompressedImage(null);
-                    setCompressionError('');
-                  } else {
-                    handleCompress();
-                  }
-                }}
+                onClick={handleCompress}
+                disabled={!!compressedImage}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 size="lg"
               >
-                {compressedImage ? 'Retry' : 'Apply Compression'}
+                {compressedImage ? 'Already Compressed ✓' : 'Apply Compression'}
               </Button>
             )}
 
@@ -1732,7 +1740,6 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           currentFormat="jpeg"
           imageData={compressedImage.imageData}
           filename={uploadedImage.filename}
-          hideQualitySlider={true}
         />
       )}
 
@@ -1748,7 +1755,6 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           currentFormat="jpeg"
           imageData={batchItems.find(i => i.id === selectedDownloadId)?.processedData || ''}
           filename={batchItems.find(i => i.id === selectedDownloadId)?.filename || 'image'}
-          hideQualitySlider={true}
         />
       )}
 

@@ -19,10 +19,12 @@ export interface FileValidationResult {
 
 /**
  * Validate if a file is a supported image format and within size limits
+ * @param file - The file to validate
+ * @param skipSizeCheck - If true, skips file size validation (for blob uploads)
  */
-export function validateImageFile(file: File): FileValidationResult {
-  // Check file size
-  if (file.size > MAX_FILE_SIZE) {
+export function validateImageFile(file: File, skipSizeCheck = false): FileValidationResult {
+  // Check file size (skip if using blob upload)
+  if (!skipSizeCheck && file.size > MAX_FILE_SIZE) {
     return {
       isValid: false,
       error: `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of 10MB`,

@@ -10,7 +10,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, Sparkles, Info, X, Edit2 } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Info, X, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ONNXImageEnhancer } from '@/lib/onnxInference';
 import JSZip from 'jszip';
@@ -36,7 +36,7 @@ interface EnhancedImage {
   };
 }
 
-type EnhancementMethod = 'non-ai';
+type EnhancementMethod = 'ai' | 'non-ai';
 
 interface EnhancementSettings {
   method: EnhancementMethod;
@@ -124,9 +124,9 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     setBatchProcessingStarted(false);
 
     const preparedFiles = await prepareFilesForBatchUpload(files, {
-      maxSizeMB: 3,
-      maxWidthOrHeight: 4096,
-      quality: 0.8,
+      maxSizeMB: 2,
+      maxWidthOrHeight: 3072,
+      quality: 0.75,
     });
 
     setUploadedFiles(preparedFiles);
@@ -138,7 +138,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
       originalSize: file.size,
       previewUrl: URL.createObjectURL(file),
       settings: {
-        method: 'non-ai', // Batch processing uses non-AI method by default for speed and consistency
+        method: enhancementMethod, // Use current selected method
         sharpness: 5,
       } as unknown as Record<string, unknown>,
     }));
@@ -182,7 +182,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         body: JSON.stringify({
           imageData: base64,
           format: 'jpeg',
-          method: settings.method === 'non-ai' ? 'sharp' : settings.method,
+          method: settings.method === 'ai' ? 'ai' : 'sharp',
           sharpness: settings.sharpness,
         }),
       });
@@ -287,12 +287,30 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     document.body.removeChild(link);
   };
 
+  const handleReset = () => {
+    resetUpload();
+    setEnhancedImage(null);
+    setProcessingStatus({
+      stage: 'idle',
+      progress: 0,
+      message: ''
+    });
+    setIsBatchMode(false);
+    setBatchItems([]);
+    setTotalProcessed(0);
+    setUploadedFiles([]);
+    setSelectedImageId(null);
+    setBatchProcessingStarted(false);
+  };
+
   const handleEnhance = async () => {
     if (!uploadedImage) return;
 
     setIsProcessing(true);
 
-    const message = onnxModelLoaded ? 'Processing with ML model...' : 'Applying sharpening filters...';
+    const message = enhancementMethod === 'ai'
+      ? 'Processing with Gemini AI...'
+      : (onnxModelLoaded ? 'Processing with NAFNet ML model...' : 'Applying sharpening filters...');
 
     setProcessingStatus({
       stage: 'analyzing',
@@ -301,6 +319,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     });
 
     try {
+      // Use client-side ONNX if available and non-AI method is selected
       if (enhancementMethod === 'non-ai' && onnxEnhancer && onnxModelLoaded) {
         setProcessingStatus({
           stage: 'enhancing',
@@ -370,10 +389,19 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         body: JSON.stringify({
           imageData: uploadedImage.imageData,
           format: 'jpeg',
-          method: 'sharp',
+          method: enhancementMethod === 'ai' ? 'ai' : 'sharp',
           sharpness: sharpness,
         }),
       });
+
+      // Check for HTTP errors (like 413 Payload Too Large)
+      if (!response.ok) {
+        const statusText = response.statusText || 'Request failed';
+        if (response.status === 413) {
+          throw new Error('Request Entity Too Large - Image is too large to process');
+        }
+        throw new Error(`HTTP ${response.status}: ${statusText}`);
+      }
 
       const result = await response.json();
 
@@ -404,7 +432,20 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         progress: 0,
         message: ''
       });
-      alert(error instanceof Error ? error.message : 'Enhancement failed');
+
+      // Check for payload size errors
+      let errorMessage = error instanceof Error ? error.message : 'Enhancement failed';
+      if (errorMessage.includes('FUNCTION_PAYLOAD_TOO_LARGE') ||
+          errorMessage.includes('Request Entity Too Large') ||
+          errorMessage.includes('too large')) {
+        errorMessage = 'Image file is too large to process. Please:\n\n' +
+                      '1. Use a smaller image (under 2MB recommended)\n' +
+                      '2. Reduce image dimensions before uploading\n' +
+                      '3. Try compressing the image first using the Image Compression mode\n\n' +
+                      'The image has been automatically compressed during upload, but it may still be too large for processing.';
+      }
+
+      alert(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -588,6 +629,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
               onProcessSingle={processSingleImage}
               onDownloadAll={handleDownloadAll}
               onDownloadSingle={handleDownloadSingle}
+              onReset={handleReset}
               onSelectImage={setSelectedImageId}
               selectedImageId={selectedImageId}
               totalProcessed={totalProcessed}
@@ -679,8 +721,16 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
               >
                 <Card>
                   <CardHeader>
-                    <CardTitle>
+                    <CardTitle className="flex items-center justify-between">
                       Image Uploaded
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleReset}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Reset
+                      </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -725,7 +775,33 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
-                    {!onnxModelLoaded && (
+                    {/* Enhancement Method Toggle */}
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-gray-700">
+                        Enhancement Method
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant={enhancementMethod === 'ai' ? 'default' : 'outline'}
+                          onClick={() => setEnhancementMethod('ai')}
+                          className="w-full"
+                        >
+                          AI Unblur
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={enhancementMethod === 'non-ai' ? 'default' : 'outline'}
+                          onClick={() => setEnhancementMethod('non-ai')}
+                          className="w-full"
+                        >
+                          {onnxModelLoaded ? 'NAFNet ML' : 'Sharp.js'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Sharpness slider only for non-AI method without ONNX */}
+                      {enhancementMethod === 'non-ai' && !onnxModelLoaded && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
@@ -752,8 +828,15 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
 
                     <div className="rounded-lg p-2 border bg-purple-50 border-purple-200">
                       <h3 className="font-semibold text-purple-900 text-xs">
-                        {onnxModelLoaded ? 'NAFNet ML Enhancement' : 'Sharp.js Enhancement'}
+                        {enhancementMethod === 'ai' ? 'Gemini AI Enhancement' : (onnxModelLoaded ? 'NAFNet ML Enhancement' : 'Sharp.js Enhancement')}
                       </h3>
+                      <p className="text-xs text-purple-700 mt-1">
+                        {enhancementMethod === 'ai'
+                          ? 'Uses Google Gemini AI to intelligently reduce blur and enhance image clarity'
+                          : (onnxModelLoaded
+                              ? 'Uses client-side NAFNet model for local ML-powered enhancement'
+                              : 'Uses Sharp.js for fast, traditional sharpening filters')}
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -765,7 +848,16 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                 transition={{ duration: 0.3, delay: 0.5 }}
                 className="flex gap-2"
               >
-                {isProcessing ? (
+                {!isProcessing && !enhancedImage && (
+                  <Button
+                    onClick={handleEnhance}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-sm py-2"
+                  >
+                    Enhance Image
+                  </Button>
+                )}
+
+                {isProcessing && (
                   <div className="flex gap-2">
                     <Button
                       disabled
@@ -782,7 +874,9 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                       Cancel
                     </Button>
                   </div>
-                ) : enhancedImage ? (
+                )}
+
+                {enhancedImage && !isProcessing && (
                   <div className="flex gap-2">
                     <Button
                       onClick={handleDownload}
@@ -802,8 +896,8 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                             mimetype: mimeType
                           });
                         } else {
-                          // Fallback to reset
-                          setEnhancedImage(null);
+                          // Fallback to go back
+                          onBack();
                         }
                       }}
                       variant="outline"
@@ -813,13 +907,6 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                       Edit Again
                     </Button>
                   </div>
-                ) : (
-                  <Button
-                    onClick={handleEnhance}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-sm py-2"
-                  >
-                    Enhance Image
-                  </Button>
                 )}
               </motion.div>
             </motion.div>
@@ -1033,7 +1120,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         transition={{ duration: 0.5, delay: 0.6 }}
         className="text-center mt-4 text-gray-500 text-xs"
       >
-        <p>NAFNet ML / Sharp.js Enhancement • Supports JPEG, PNG, WebP and SVG</p>
+        <p>Gemini AI / NAFNet ML / Sharp.js Enhancement • Supports JPEG, PNG, WebP and SVG</p>
       </motion.footer>
 
       {/* Format Download Dialog */}

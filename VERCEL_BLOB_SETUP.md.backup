@@ -284,6 +284,7 @@ await db.uploadResults.create({
     blobUrl: blob.url,
     imageData: uploadData,
     expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+=======
 # Vercel Blob Setup Guide
 
 This application uses **Vercel Blob Storage** to bypass the 4.5MB serverless function limit and support image uploads of any size.
@@ -348,10 +349,12 @@ const blob = await upload(file.name, file, {
   handleUploadUrl: '/api/blob/upload-token',
   onUploadProgress: (progressEvent) => {
     // Track upload progress
+>>>>>>> 14e65a42a6714bb4ecaa6ef777b1d3264cb8f1a7
   },
 });
 ```
 
+<<<<<<< HEAD
 **Option 3: Vercel KV** (Simplest for Vercel)
 ```typescript
 import { kv } from '@vercel/kv';
@@ -483,6 +486,7 @@ For issues or questions about this implementation:
 1. Check the logs in Vercel Dashboard
 2. Verify `BLOB_READ_WRITE_TOKEN` is set correctly
 3. Review the [Common Issues](#common-issues) section above
+=======
 #### Server-Side (Token Generation)
 ```typescript
 // src/app/api/blob/upload-token/route.ts
@@ -654,3 +658,4 @@ Since we delete blobs after processing, storage usage is minimal. Main cost is b
 - File type validation on server-side
 - Public read access only (no write)
 - Automatic cleanup prevents blob accumulation
+>>>>>>> 14e65a42a6714bb4ecaa6ef777b1d3264cb8f1a7

@@ -10,7 +10,7 @@ import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { useImageProcessing } from '@/hooks/useImageProcessing';
 import { ImageDimensions } from '@/types';
-import { Download, Bot, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
+import { Download, RotateCcw, Bot, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import JSZip from 'jszip';
 import Image from 'next/image';
@@ -354,6 +354,12 @@ function AIImageResizingBatchContent({ initialFiles }: AIImageResizingBatchConte
     }
   };
 
+  const handleReset = () => {
+    batchItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+    setBatchItems([]);
+    setSelectedImageId(null);
+  };
+
   const selectedItem = selectedImageId ? batchItems.find(i => i.id === selectedImageId) : null;
   const completedCount = batchItems.filter(i => i.status === 'completed').length;
   const pendingCount = batchItems.filter(i => i.status === 'pending').length;
@@ -490,8 +496,12 @@ function AIImageResizingBatchContent({ initialFiles }: AIImageResizingBatchConte
         >
           <Card>
             <CardHeader>
-              <CardTitle>
-                Images ({batchItems.length})
+              <CardTitle className="flex items-center justify-between">
+                <span>Images ({batchItems.length})</span>
+                <Button variant="outline" size="sm" onClick={handleReset}>
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reset
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -722,21 +732,12 @@ function AIImageResizingBatchContent({ initialFiles }: AIImageResizingBatchConte
                     </CardHeader>
                     <CardContent className="space-y-2">
                       <Button
-                        onClick={() => {
-                          if (selectedItem.status === 'completed') {
-                            // Reset the item to pending to allow retry
-                            setBatchItems(prev => prev.map(i =>
-                              i.id === selectedItem.id ? { ...i, status: 'pending' as const, processedData: undefined, processedSize: undefined } : i
-                            ));
-                          } else {
-                            handleProcessImage(selectedItem.id);
-                          }
-                        }}
-                        disabled={isProcessing || selectedItem.status === 'processing'}
+                        onClick={() => handleProcessImage(selectedItem.id)}
+                        disabled={isProcessing || selectedItem.status === 'completed' || selectedItem.status === 'processing'}
                         className="w-full bg-blue-600 hover:bg-blue-700"
                       >
                         <Bot className="h-4 w-4 mr-2" />
-                        {selectedItem.status === 'completed' ? 'Retry' : 'Process This Image'}
+                        {selectedItem.status === 'completed' ? 'Processed ✓' : 'Process This Image'}
                       </Button>
                       <AnimatePresence>
                         {selectedItem.status === 'completed' && (
@@ -888,6 +889,11 @@ function AIImageResizingContent({
     processImage(uploadedImage.imageData, targetDimensions);
   };
 
+  const handleReset = () => {
+    resetUpload();
+    resetProcessing();
+  };
+
   const handleDimensionsChange = (dimensions: ImageDimensions) => {
     setTargetDimensions(dimensions);
     resetProcessing();
@@ -967,8 +973,16 @@ function AIImageResizingContent({
             >
             <Card>
               <CardHeader>
-                <CardTitle>
+                <CardTitle className="flex items-center justify-between">
                   Image Uploaded
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReset}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1017,18 +1031,12 @@ function AIImageResizingContent({
               </Button>
             ) : (
               <Button
-                onClick={() => {
-                  if (processedImage) {
-                    // Reset processed image to allow retry
-                    resetProcessing();
-                  } else {
-                    handleProcess();
-                  }
-                }}
+                onClick={handleProcess}
+                disabled={!!processedImage}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 size="lg"
               >
-                {processedImage ? 'Retry' : 'Generative Expand'}
+                {processedImage ? 'Already Processed ✓' : 'Generative Expand'}
               </Button>
             )}
 
