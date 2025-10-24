@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     console.log(`[Process] Downloaded ${imageBuffer.length} bytes from blob`);
 
     // Step 2: Process based on operation type
-    let processedBuffer: Buffer;
+    let processedBuffer: Buffer | undefined;
     let metadata: { width: number; height: number; format: string; size: number };
 
     switch (operation) {
@@ -233,6 +233,10 @@ export async function POST(req: NextRequest) {
           processedBuffer = await sharpInstance.toBuffer();
         }
 
+        if (!processedBuffer) {
+          throw new Error('Compression failed: no buffer generated');
+        }
+
         const compressedMetadata = await sharp(processedBuffer).metadata();
 
         metadata = {
@@ -248,7 +252,7 @@ export async function POST(req: NextRequest) {
 
       case 'enhance': {
         const { ImageProcessor } = await import('@/lib/imageProcessor');
-        const { method = 'sharp', sharpness = 5, format = 'jpeg', quality = 90 } = params;
+        const { method = 'sharp', sharpness = 5, format = 'jpeg' } = params;
 
         const processor = new ImageProcessor(process.env.GEMINI_API_KEY);
         const enhancedImage = method === 'ai'
@@ -332,6 +336,11 @@ export async function POST(req: NextRequest) {
 
       default:
         throw new Error(`Unsupported operation: ${operation}`);
+    }
+
+    // Ensure processedBuffer was assigned
+    if (!processedBuffer) {
+      throw new Error('Processing failed: no buffer generated');
     }
 
     // Step 3: Delete the blob immediately after processing
