@@ -68,21 +68,12 @@ export function useFileUpload() {
       // This leaves headroom for JSON overhead and processing
       let fileToUpload = file;
 
-<<<<<<< HEAD
       if (originalSize > 2 * 1024 * 1024) { // If larger than 2MB (but smaller than 3MB)
         console.log('Compressing image before upload...');
         fileToUpload = await compressImage(file, {
           maxSizeMB: 2,
           maxWidthOrHeight: 4096,
           quality: 0.8,
-=======
-      if (originalSize > 2 * 1024 * 1024) { // If larger than 2MB
-        console.log('Compressing image before upload...');
-        fileToUpload = await compressImage(file, {
-          maxSizeMB: 2,
-          maxWidthOrHeight: 3072,
-          quality: 0.75,
->>>>>>> 14e65a42a6714bb4ecaa6ef777b1d3264cb8f1a7
         });
 
         const compressedSize = fileToUpload.size;

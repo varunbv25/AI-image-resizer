@@ -1,4 +1,5 @@
-import { handleUpload, type HandleUploadBody, del } from '@vercel/blob/client';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { del } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { ImageProcessor } from '@/lib/imageProcessor';
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         try {
           // Parse token payload
-          const { uploadedAt, originalPath } = JSON.parse(tokenPayload);
+          const { uploadedAt, originalPath } = JSON.parse(tokenPayload || '{}');
           console.log(`Processing file from ${uploadedAt}, path: ${originalPath}`);
 
           // Fetch the file from blob storage
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           uploadResults.set(blob.url, {
             filename: blob.pathname,
             originalDimensions,
-            size: blob.size,
+            size: buffer.length, // Use actual buffer size
             mimetype: blob.contentType || 'image/jpeg',
             imageData,
             timestamp: Date.now(),
