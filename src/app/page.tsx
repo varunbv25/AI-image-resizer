@@ -12,6 +12,7 @@ import { ImageCompression } from '@/components/modes/ImageCompression';
 import { ImageEnhancement } from '@/components/modes/ImageEnhancement';
 import { RotateFlip } from '@/components/modes/RotateFlip';
 import { useDropzone } from 'react-dropzone';
+import { FILE_SIZE_LIMITS, validateImageFiles } from '@/lib/fileValidation';
 
 type Mode = 'ai-crop' | 'manual-crop' | 'compression' | 'enhancement' | 'rotate-flip' | null;
 type Step = 'upload' | 'mode-selection' | 'processing';
@@ -88,6 +89,26 @@ function HomeContent() {
       setIsUploading(true);
       setUploadProgress(0);
 
+      // Validate all files against the most permissive limit (10MB)
+      const validation = validateImageFiles(acceptedFiles, 10 * 1024 * 1024);
+
+      if (!validation.isValid) {
+        // Show validation errors
+        const errorMessages = validation.invalidFiles.map(
+          ({ file, error }) => `${file.name}: ${error}`
+        ).join('\n');
+        alert(`Some files are invalid:\n\n${errorMessages}`);
+        setIsUploading(false);
+
+        // Use only valid files if any
+        if (validation.validFiles.length > 0) {
+          setUploadedFiles(validation.validFiles);
+          setCurrentStep('mode-selection');
+          router.push('/?step=mode-selection');
+        }
+        return;
+      }
+
       // Simulate upload progress
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
@@ -129,24 +150,6 @@ function HomeContent() {
   });
 
   const handleModeSelect = (mode: Mode) => {
-    // Check file size restrictions for certain modes
-    const maxSizeForMode = 3 * 1024 * 1024; // 3MB
-    const restrictedModes: Mode[] = ['ai-crop', 'enhancement'];
-
-    if (restrictedModes.includes(mode)) {
-      // Check if any file exceeds 3MB
-      const hasOversizedFile = uploadedFiles.some(file => file.size > maxSizeForMode);
-
-      if (hasOversizedFile) {
-        const modeNames = {
-          'ai-crop': 'Generative Expand',
-          'enhancement': 'Enhancement'
-        };
-        alert(`${modeNames[mode as 'ai-crop' | 'enhancement']} mode only supports files under 3MB. Please use a smaller file or try compression mode first.`);
-        return;
-      }
-    }
-
     setSelectedMode(mode);
     setCurrentStep('processing');
     // Update URL with mode
@@ -402,6 +405,41 @@ function HomeContent() {
       ? Object.entries(modeConfig).filter(([key]) => batchCapableModes.includes(key as Mode))
       : Object.entries(modeConfig);
 
+    // Check file size compatibility for each mode
+    const getModeCompatibility = (modeKey: Mode) => {
+      let maxSize: number;
+
+      switch (modeKey) {
+        case 'ai-crop':
+          maxSize = FILE_SIZE_LIMITS.GENERATIVE_EXPAND;
+          break;
+        case 'enhancement':
+          maxSize = FILE_SIZE_LIMITS.IMAGE_ENHANCEMENT;
+          break;
+        case 'manual-crop':
+          maxSize = FILE_SIZE_LIMITS.MANUAL_CROPPING;
+          break;
+        case 'compression':
+          maxSize = FILE_SIZE_LIMITS.IMAGE_COMPRESSION;
+          break;
+        case 'rotate-flip':
+          maxSize = FILE_SIZE_LIMITS.ROTATE_FLIP;
+          break;
+        default:
+          maxSize = FILE_SIZE_LIMITS.DEFAULT;
+      }
+
+      const oversizedFiles = uploadedFiles.filter(file => file.size > maxSize);
+      const isCompatible = oversizedFiles.length === 0;
+
+      return {
+        isCompatible,
+        maxSize,
+        oversizedFiles,
+        maxSizeMB: (maxSize / 1024 / 1024).toFixed(0)
+      };
+    };
+
     return (
     <motion.div
       key="mode-selection"
@@ -504,30 +542,28 @@ function HomeContent() {
           <div className={`grid grid-cols-1 md:grid-cols-2 ${isBatchUpload ? 'lg:grid-cols-3' : 'lg:grid-cols-5'} gap-4`}>
             {availableModes.map(([key, config], index) => {
               const Icon = config.icon;
-              const maxSizeForMode = 3 * 1024 * 1024; // 3MB
-              const restrictedModes: Mode[] = ['ai-crop', 'enhancement'];
-              const isRestricted = restrictedModes.includes(key as Mode);
-              const hasOversizedFile = isRestricted && uploadedFiles.some(file => file.size > maxSizeForMode);
+              const compatibility = getModeCompatibility(key as Mode);
+              const isCompatible = compatibility.isCompatible;
 
               return (
                 <motion.div
                   key={key}
                   variants={cardVariants}
-                  whileHover={hasOversizedFile ? undefined : "hover"}
-                  whileTap={hasOversizedFile ? undefined : { scale: 0.95 }}
+                  whileHover={isCompatible ? "hover" : undefined}
+                  whileTap={isCompatible ? { scale: 0.95 } : undefined}
                   custom={index}
                 >
                   <Card
                     className={`cursor-pointer border-2 h-full flex flex-col transition-all duration-300 shadow-lg ${
-                      hasOversizedFile
+                      !isCompatible
                         ? 'opacity-50 cursor-not-allowed border-gray-300'
                         : `hover:border-${config.color}-300 hover:shadow-2xl`
                     }`}
-                    onClick={() => handleModeSelect(key as Mode)}
+                    onClick={() => isCompatible && handleModeSelect(key as Mode)}
                   >
                     <CardHeader className="text-center pb-3 pt-4">
                       <motion.div
-                        whileHover={{ rotate: 360 }}
+                        whileHover={isCompatible ? { rotate: 360 } : undefined}
                         transition={{ duration: 0.5 }}
                         className={`w-12 h-12 mx-auto mb-3 bg-${config.color}-100 rounded-full flex items-center justify-center`}
                       >
@@ -541,9 +577,9 @@ function HomeContent() {
                       <p className="text-gray-600 mb-3 text-xs leading-snug">
                         {config.description}
                       </p>
-                      {hasOversizedFile && (
+                      {!isCompatible && (
                         <div className="mb-3 px-2 py-1.5 bg-red-50 border border-red-200 rounded text-xs text-red-600">
-                          ⚠️ File too large (max 3MB)
+                          ⚠️ File too large (max {compatibility.maxSizeMB}MB)
                         </div>
                       )}
                       <ul className="text-xs text-gray-500 space-y-0.5 mb-4 flex-grow text-left">
@@ -552,14 +588,14 @@ function HomeContent() {
                         ))}
                       </ul>
                       <Button
-                        disabled={hasOversizedFile}
+                        disabled={!isCompatible}
                         className={`w-full mt-auto text-sm py-1.5 ${
-                          hasOversizedFile
+                          !isCompatible
                             ? 'bg-gray-400 cursor-not-allowed'
                             : `bg-${config.color}-600 hover:bg-${config.color}-700`
                         }`}
                       >
-                        {hasOversizedFile ? 'Unavailable' : 'Select'}
+                        {!isCompatible ? 'Unavailable' : 'Select'}
                       </Button>
                     </CardContent>
                   </Card>
