@@ -11,9 +11,10 @@ interface ImageUploaderProps {
   onBatchImageUpload?: (files: File[]) => void;
   isUploading: boolean;
   supportsBatch?: boolean;
+  uploadProgress?: number;
 }
 
-export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, supportsBatch = false }: ImageUploaderProps) {
+export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, supportsBatch = false, uploadProgress = 0 }: ImageUploaderProps) {
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -67,6 +68,20 @@ export function ImageUploader({ onImageUpload, onBatchImageUpload, isUploading, 
             <p className="text-sm text-gray-500">
               Supports JPEG, PNG, WebP and SVG{supportsBatch && ' • Multiple files supported'}
             </p>
+            {isUploading && uploadProgress > 0 && (
+              <div className="mt-4 w-full max-w-xs mx-auto">
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span>Upload Progress</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
             {!isUploading && (
               <p className="text-xs text-gray-400 mt-2">
                 Large images will be automatically compressed to ensure smooth upload

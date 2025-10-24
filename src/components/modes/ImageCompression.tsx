@@ -71,6 +71,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     uploadedImage,
     error: uploadError,
     validationError,
+    uploadProgress,
     uploadFile,
     reset: resetUpload,
   } = useFileUpload();
@@ -738,6 +739,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                 onImageUpload={handleImageUpload}
                 onBatchImageUpload={handleBatchImageUpload}
                 isUploading={isUploading}
+                uploadProgress={uploadProgress}
                 supportsBatch={true}
               />
             )}

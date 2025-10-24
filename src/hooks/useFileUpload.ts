@@ -5,6 +5,7 @@ import { ImageDimensions, APIResponse } from '@/types';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { compressImage, formatFileSize, calculateCompressionRatio } from '@/lib/clientImageCompression';
 import { validateImageFile } from '@/lib/fileValidation';
+import { uploadToBlob, shouldUseBlobUpload } from '@/lib/blobUploadHelper';
 
 interface UploadedImageData {
   filename: string;
@@ -19,11 +20,13 @@ export function useFileUpload() {
   const [uploadedImage, setUploadedImage] = useState<UploadedImageData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<{ type: 'format' | 'size' | null; filename: string | null }>({ type: null, filename: null });
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const uploadFile = useCallback(async (file: File) => {
     setIsUploading(true);
     setError(null);
     setValidationError({ type: null, filename: null });
+    setUploadProgress(0);
 
     try {
       // Validate file format and size
@@ -37,15 +40,37 @@ export function useFileUpload() {
       const originalSize = file.size;
       console.log(`Original file size: ${formatFileSize(originalSize)}`);
 
+      // Check if file should use blob upload (bypassing the 4.5MB Vercel limit)
+      if (shouldUseBlobUpload(originalSize)) {
+        console.log('Using Vercel Blob client upload for large file...');
+
+        const result = await uploadToBlob(file, {
+          onProgress: (progress) => {
+            setUploadProgress(progress);
+          },
+        });
+
+        setUploadedImage({
+          filename: result.filename,
+          originalDimensions: result.originalDimensions,
+          size: result.size,
+          mimetype: result.mimetype,
+          imageData: result.imageData,
+        });
+
+        return;
+      }
+
+      // For smaller files, use the traditional upload method
       // Compress image before upload to prevent payload size errors
       // Max 3MB to ensure compatibility with most platforms (Vercel 4.5MB limit)
       // Base64 encoding adds ~33% overhead, so 3MB file → ~4MB base64
       let fileToUpload = file;
 
-      if (originalSize > 3 * 1024 * 1024) { // If larger than 3MB
+      if (originalSize > 2 * 1024 * 1024) { // If larger than 2MB (but smaller than 3MB)
         console.log('Compressing image before upload...');
         fileToUpload = await compressImage(file, {
-          maxSizeMB: 3,
+          maxSizeMB: 2,
           maxWidthOrHeight: 4096,
           quality: 0.8,
         });
@@ -76,6 +101,7 @@ export function useFileUpload() {
       console.error('Upload error:', err);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   }, []);
 
@@ -84,6 +110,7 @@ export function useFileUpload() {
     setError(null);
     setIsUploading(false);
     setValidationError({ type: null, filename: null });
+    setUploadProgress(0);
   }, []);
 
   return {
@@ -91,6 +118,7 @@ export function useFileUpload() {
     uploadedImage,
     error,
     validationError,
+    uploadProgress,
     uploadFile,
     reset,
   };

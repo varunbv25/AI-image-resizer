@@ -67,6 +67,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
     uploadedImage,
     error: uploadError,
     validationError,
+    uploadProgress,
     uploadFile,
     reset: resetUpload,
   } = useFileUpload();
@@ -529,6 +530,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
                 onImageUpload={handleImageUpload}
                 onBatchImageUpload={handleBatchImageUpload}
                 isUploading={isUploading}
+                uploadProgress={uploadProgress}
                 supportsBatch={true}
               />
             )}

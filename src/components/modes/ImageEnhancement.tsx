@@ -78,6 +78,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
     uploadedImage,
     error: uploadError,
     validationError,
+    uploadProgress,
     uploadFile,
     reset: resetUpload,
   } = useFileUpload();
@@ -568,6 +569,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
               onImageUpload={handleImageUpload}
               onBatchImageUpload={handleBatchImageUpload}
               isUploading={isUploading}
+              uploadProgress={uploadProgress}
               supportsBatch={true}
             />
           </motion.div>

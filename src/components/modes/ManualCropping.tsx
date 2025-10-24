@@ -406,6 +406,7 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
             onImageUpload={(file) => handleBatchImageUpload([file])}
             onBatchImageUpload={handleBatchImageUpload}
             isUploading={false}
+            uploadProgress={0}
             supportsBatch={true}
           />
         </motion.div>
@@ -694,6 +695,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     uploadedImage,
     error: uploadError,
     validationError,
+    uploadProgress,
     uploadFile,
     reset: resetUpload,
   } = useFileUpload();
@@ -1338,6 +1340,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                 onImageUpload={handleImageUpload}
                 onBatchImageUpload={handleBatchImageUpload}
                 isUploading={isUploading}
+                uploadProgress={uploadProgress}
                 supportsBatch={true}
               />
             )}
