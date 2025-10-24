@@ -8,6 +8,7 @@ export interface ProcessingOptions {
   imageData?: string; // base64 for small files
   blobUrl?: string; // blob URL for large files
   targetDimensions?: { width: number; height: number };
+  cropArea?: { x: number; y: number; width: number; height: number }; // For manual cropping
   quality?: number;
   format?: 'jpeg' | 'png' | 'webp';
 

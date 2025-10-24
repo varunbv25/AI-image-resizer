@@ -15,9 +15,18 @@ interface ProcessFromBlobRequest {
     quality?: number;
     format?: 'jpeg' | 'png' | 'webp';
 
+    // For manual cropping (canvas-based)
+    cropArea?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+
     // For compression
     maxFileSizePercent?: number;
     maxFileSizeKB?: number;
+    originalSize?: number;
 
     // For enhancement
     method?: 'ai' | 'sharp' | 'onnx';
@@ -75,17 +84,28 @@ export async function POST(req: NextRequest) {
       case 'resize': {
         // Import sharp and process
         const sharp = (await import('sharp')).default;
-        const { targetDimensions, quality = 80, format = 'jpeg' } = params;
+        const { targetDimensions, cropArea, quality = 80, format = 'jpeg' } = params;
 
-        if (!targetDimensions) {
-          throw new Error('Missing targetDimensions for resize/crop operation');
-        }
+        let sharpInstance = sharp(imageBuffer, { limitInputPixels: 1000000000 });
 
-        let sharpInstance = sharp(imageBuffer, { limitInputPixels: 1000000000 })
-          .resize(targetDimensions.width, targetDimensions.height, {
+        // If cropArea is provided (manual cropping), extract that region first
+        if (cropArea) {
+          console.log(`[Process] Extracting crop area: x=${cropArea.x}, y=${cropArea.y}, w=${cropArea.width}, h=${cropArea.height}`);
+          sharpInstance = sharpInstance.extract({
+            left: Math.round(cropArea.x),
+            top: Math.round(cropArea.y),
+            width: Math.round(cropArea.width),
+            height: Math.round(cropArea.height),
+          });
+        } else if (targetDimensions) {
+          // Otherwise, resize to target dimensions
+          sharpInstance = sharpInstance.resize(targetDimensions.width, targetDimensions.height, {
             fit: 'cover',
             position: 'center',
           });
+        } else {
+          throw new Error('Missing targetDimensions or cropArea for crop/resize operation');
+        }
 
         // Apply format
         switch (format) {
@@ -104,8 +124,8 @@ export async function POST(req: NextRequest) {
         const processedMetadata = await sharp(processedBuffer).metadata();
 
         metadata = {
-          width: processedMetadata.width || targetDimensions.width,
-          height: processedMetadata.height || targetDimensions.height,
+          width: processedMetadata.width || cropArea?.width || targetDimensions?.width || 0,
+          height: processedMetadata.height || cropArea?.height || targetDimensions?.height || 0,
           format: format,
           size: processedBuffer.length,
         };
@@ -115,17 +135,15 @@ export async function POST(req: NextRequest) {
       case 'compress': {
         const sharp = (await import('sharp')).default;
 
-        const { quality = 80, format = 'jpeg' } = params;
-        // Note: maxFileSizePercent and maxFileSizeKB would be used for advanced compression
-        // For now, using basic quality-based compression
+        const { quality, format = 'jpeg', maxFileSizeKB, maxFileSizePercent, originalSize } = params;
 
-        // Similar to compress-image route logic
+        // Convert SVG to raster if needed
         const header = imageBuffer.slice(0, 100).toString('utf-8');
         const isSVG = header.includes('<svg') || header.includes('<?xml');
 
         let workingBuffer: Buffer = imageBuffer;
         if (isSVG) {
-          console.log('Converting SVG to raster format for compression...');
+          console.log('[Process] Converting SVG to raster format for compression...');
           const svgConverted = await sharp(imageBuffer, {
             density: 300,
             limitInputPixels: 1000000000
@@ -133,22 +151,88 @@ export async function POST(req: NextRequest) {
           workingBuffer = Buffer.from(svgConverted);
         }
 
-        // Basic compression
-        let sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
+        // Iterative compression to target size
+        let currentQuality = quality || 80;
+        let attempts = 0;
+        const maxAttempts = 10;
 
-        switch (format) {
-          case 'jpeg':
-            sharpInstance = sharpInstance.jpeg({ quality, mozjpeg: true, progressive: true });
-            break;
-          case 'png':
-            sharpInstance = sharpInstance.png({ compressionLevel: 9, palette: true });
-            break;
-          case 'webp':
-            sharpInstance = sharpInstance.webp({ quality });
-            break;
+        if (maxFileSizeKB) {
+          // Target specific file size in KB
+          const targetSize = maxFileSizeKB * 1024;
+          console.log(`[Process] Compressing to target size: ${maxFileSizeKB}KB`);
+
+          while (attempts < maxAttempts) {
+            let testInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
+
+            switch (format) {
+              case 'jpeg':
+                testInstance = testInstance.jpeg({ quality: currentQuality, mozjpeg: true, progressive: true });
+                break;
+              case 'png':
+                testInstance = testInstance.png({ compressionLevel: 9, palette: true });
+                break;
+              case 'webp':
+                testInstance = testInstance.webp({ quality: currentQuality });
+                break;
+            }
+
+            processedBuffer = await testInstance.toBuffer();
+
+            if (processedBuffer.length <= targetSize || currentQuality <= 10) {
+              break;
+            }
+
+            currentQuality = Math.max(10, currentQuality - 10);
+            attempts++;
+          }
+        } else if (maxFileSizePercent && originalSize) {
+          // Target percentage of original size
+          const targetSize = (originalSize * maxFileSizePercent) / 100;
+          console.log(`[Process] Compressing to ${maxFileSizePercent}% of original (${targetSize} bytes)`);
+
+          while (attempts < maxAttempts) {
+            let testInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
+
+            switch (format) {
+              case 'jpeg':
+                testInstance = testInstance.jpeg({ quality: currentQuality, mozjpeg: true, progressive: true });
+                break;
+              case 'png':
+                testInstance = testInstance.png({ compressionLevel: 9, palette: true });
+                break;
+              case 'webp':
+                testInstance = testInstance.webp({ quality: currentQuality });
+                break;
+            }
+
+            processedBuffer = await testInstance.toBuffer();
+
+            if (processedBuffer.length <= targetSize || currentQuality <= 10) {
+              break;
+            }
+
+            currentQuality = Math.max(10, currentQuality - 10);
+            attempts++;
+          }
+        } else {
+          // Simple quality-based compression
+          let sharpInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
+
+          switch (format) {
+            case 'jpeg':
+              sharpInstance = sharpInstance.jpeg({ quality: currentQuality, mozjpeg: true, progressive: true });
+              break;
+            case 'png':
+              sharpInstance = sharpInstance.png({ compressionLevel: 9, palette: true });
+              break;
+            case 'webp':
+              sharpInstance = sharpInstance.webp({ quality: currentQuality });
+              break;
+          }
+
+          processedBuffer = await sharpInstance.toBuffer();
         }
 
-        processedBuffer = await sharpInstance.toBuffer();
         const compressedMetadata = await sharp(processedBuffer).metadata();
 
         metadata = {
@@ -157,6 +241,8 @@ export async function POST(req: NextRequest) {
           format: format,
           size: processedBuffer.length,
         };
+
+        console.log(`[Process] Compression complete: ${processedBuffer.length} bytes (quality: ${currentQuality}, attempts: ${attempts})`);
         break;
       }
 
