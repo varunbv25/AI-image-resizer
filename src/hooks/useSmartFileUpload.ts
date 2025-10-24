@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { ImageDimensions, APIResponse } from '@/types';
 import { safeJsonParse } from '@/lib/safeJsonParse';
-import { validateImageFile } from '@/lib/fileValidation';
+import { validateImageFile, ProcessingMode } from '@/lib/fileValidation';
 import { upload } from '@vercel/blob/client';
 
 /**
@@ -27,8 +27,10 @@ interface UploadedImageData {
  * Smart file upload hook that automatically chooses the best upload method:
  * - Small files (≤3MB): Traditional FormData upload (like commit fbad279)
  * - Large files (>3MB): Vercel Blob direct upload workflow
+ *
+ * @param mode - Optional processing mode for mode-specific file size limits
  */
-export function useSmartFileUpload() {
+export function useSmartFileUpload(mode?: ProcessingMode) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<UploadedImageData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +47,8 @@ export function useSmartFileUpload() {
     setUploadProgress(0);
 
     try {
-      // Validate file format and size
-      const validation = validateImageFile(file);
+      // Validate file format and size with mode-specific limits
+      const validation = validateImageFile(file, undefined, mode);
       if (!validation.isValid) {
         setValidationError({
           type: validation.errorType || 'format',
@@ -137,7 +139,7 @@ export function useSmartFileUpload() {
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, []);
+  }, [mode]);
 
   const reset = useCallback(() => {
     setUploadedImage(null);

@@ -9,7 +9,19 @@ export const SUPPORTED_FORMATS = {
   'image/svg+xml': ['.svg'],
 } as const;
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+// Mode-specific file size limits
+export const FILE_SIZE_LIMITS = {
+  MANUAL_CROPPING: 10 * 1024 * 1024, // 10MB
+  IMAGE_COMPRESSION: 10 * 1024 * 1024, // 10MB
+  ROTATE_FLIP: 10 * 1024 * 1024, // 10MB
+  GENERATIVE_EXPAND: 3 * 1024 * 1024, // 3MB
+  IMAGE_ENHANCEMENT: 3 * 1024 * 1024, // 3MB
+  DEFAULT: 10 * 1024 * 1024, // 10MB default
+} as const;
+
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB (kept for backward compatibility)
+
+export type ProcessingMode = keyof typeof FILE_SIZE_LIMITS;
 
 export interface FileValidationResult {
   isValid: boolean;
@@ -20,14 +32,23 @@ export interface FileValidationResult {
 /**
  * Validate if a file is a supported image format and within size limits
  * @param file - The file to validate
- * @param skipSizeCheck - If true, skips file size validation (for blob uploads)
+ * @param maxSizeBytes - Optional custom max size in bytes (overrides mode-specific limits)
+ * @param mode - Optional processing mode to use mode-specific size limits
  */
-export function validateImageFile(file: File, skipSizeCheck = false): FileValidationResult {
-  // Check file size (skip if using blob upload)
-  if (!skipSizeCheck && file.size > MAX_FILE_SIZE) {
+export function validateImageFile(
+  file: File,
+  maxSizeBytes?: number,
+  mode?: ProcessingMode
+): FileValidationResult {
+  // Determine the size limit to use
+  const sizeLimit = maxSizeBytes || (mode ? FILE_SIZE_LIMITS[mode] : MAX_FILE_SIZE);
+  const sizeLimitMB = (sizeLimit / 1024 / 1024).toFixed(0);
+
+  // Check file size
+  if (file.size > sizeLimit) {
     return {
       isValid: false,
-      error: `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of 10MB`,
+      error: `File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of ${sizeLimitMB}MB`,
       errorType: 'size',
     };
   }
@@ -56,6 +77,45 @@ export function validateImageFile(file: File, skipSizeCheck = false): FileValida
   }
 
   return { isValid: true };
+}
+
+/**
+ * Validate multiple files (batch upload)
+ * @param files - Array of files to validate
+ * @param maxSizeBytes - Optional custom max size in bytes
+ * @param mode - Optional processing mode to use mode-specific size limits
+ * @returns Object with validation results and any invalid files
+ */
+export function validateImageFiles(
+  files: File[],
+  maxSizeBytes?: number,
+  mode?: ProcessingMode
+): {
+  isValid: boolean;
+  invalidFiles: Array<{ file: File; error: string; errorType: 'format' | 'size' }>;
+  validFiles: File[];
+} {
+  const invalidFiles: Array<{ file: File; error: string; errorType: 'format' | 'size' }> = [];
+  const validFiles: File[] = [];
+
+  for (const file of files) {
+    const validation = validateImageFile(file, maxSizeBytes, mode);
+    if (!validation.isValid) {
+      invalidFiles.push({
+        file,
+        error: validation.error || 'Invalid file',
+        errorType: validation.errorType || 'format',
+      });
+    } else {
+      validFiles.push(file);
+    }
+  }
+
+  return {
+    isValid: invalidFiles.length === 0,
+    invalidFiles,
+    validFiles,
+  };
 }
 
 /**

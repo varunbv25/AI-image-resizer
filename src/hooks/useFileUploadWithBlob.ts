@@ -35,8 +35,8 @@ export function useFileUploadWithBlob() {
     setValidationError({ type: null, filename: null });
 
     try {
-      // Validate file format (no size limit for blob uploads!)
-      const validation = validateImageFile(file, true); // true = skip size validation
+      // Validate file format only (use large size limit for blob uploads)
+      const validation = validateImageFile(file, 50 * 1024 * 1024); // 50MB max for blob
       if (!validation.isValid) {
         setValidationError({
           type: validation.errorType || 'format',
