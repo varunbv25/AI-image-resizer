@@ -178,8 +178,45 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       ));
 
       try {
-        // Read file as base64
-        const base64 = await fileToBase64(file);
+        let requestBody: {
+          imageData?: string;
+          blobUrl?: string;
+          maxFileSizePercent?: number;
+          maxFileSizeKB?: number;
+          quality?: number;
+          originalSize: number;
+        };
+
+        // Check if file is large enough to warrant blob upload (>3MB)
+        const shouldUseBlob = file.size > 3 * 1024 * 1024;
+
+        if (shouldUseBlob) {
+          // Upload to blob storage first
+          const { upload } = await import('@vercel/blob/client');
+          const blob = await upload(file.name, file, {
+            access: 'public',
+            handleUploadUrl: '/api/blob-upload',
+          });
+
+          requestBody = {
+            blobUrl: blob.url,
+            maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
+            maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
+            quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
+            originalSize: file.size,
+          };
+        } else {
+          // Read file as base64 for smaller files
+          const base64 = await fileToBase64(file);
+
+          requestBody = {
+            imageData: base64,
+            maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
+            maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
+            quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
+            originalSize: file.size,
+          };
+        }
 
         // Compress image
         const response = await fetch('/api/compress-image', {
@@ -187,13 +224,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            imageData: base64,
-            maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
-            maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
-            quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
-            originalSize: file.size,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         const result = await safeJsonParse(response);
@@ -250,8 +281,45 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
     ));
 
     try {
-      // Read file as base64
-      const base64 = await fileToBase64(file);
+      let requestBody: {
+        imageData?: string;
+        blobUrl?: string;
+        maxFileSizePercent?: number;
+        maxFileSizeKB?: number;
+        quality?: number;
+        originalSize: number;
+      };
+
+      // Check if file is large enough to warrant blob upload (>3MB)
+      const shouldUseBlob = file.size > 3 * 1024 * 1024;
+
+      if (shouldUseBlob) {
+        // Upload to blob storage first
+        const { upload } = await import('@vercel/blob/client');
+        const blob = await upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/blob-upload',
+        });
+
+        requestBody = {
+          blobUrl: blob.url,
+          maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
+          maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
+          quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
+          originalSize: file.size,
+        };
+      } else {
+        // Read file as base64 for smaller files
+        const base64 = await fileToBase64(file);
+
+        requestBody = {
+          imageData: base64,
+          maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
+          maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
+          quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
+          originalSize: file.size,
+        };
+      }
 
       // Compress image
       const response = await fetch('/api/compress-image', {
@@ -259,13 +327,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          imageData: base64,
-          maxFileSizePercent: settings.compressionMode === 'quality' ? settings.maxFileSize : undefined,
-          maxFileSizeKB: settings.compressionMode === 'filesize' ? settings.maxFileSizeKB : undefined,
-          quality: settings.compressionMode === 'quality' ? settings.quality : undefined,
-          originalSize: file.size,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await safeJsonParse(response);
