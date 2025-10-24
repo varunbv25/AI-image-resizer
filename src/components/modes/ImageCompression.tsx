@@ -84,6 +84,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       if (preUploadedFiles.length > 1) {
         handleBatchImageUpload(preUploadedFiles);
       } else {
+        originalFileRef.current = preUploadedFiles[0]; // Store original file for client-side processing
         uploadFile(preUploadedFiles[0]);
         setCompressedImage(null);
         setCompressionError('');

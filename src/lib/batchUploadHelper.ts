@@ -115,20 +115,33 @@ export async function uploadBatchFile(
 
   // Check if we should use blob upload
   if (shouldUseBlobUpload(file.size)) {
-    console.log(`[Batch] Using blob upload for ${file.name}`);
+    console.log(`[Batch] Attempting blob upload for ${file.name}`);
 
-    const result = await uploadToBlob(file, {
-      onProgress,
-      clientPayload: {
-        source: 'batch',
-        filename: file.name,
-      },
-    });
+    try {
+      const result = await uploadToBlob(file, {
+        onProgress,
+        clientPayload: {
+          source: 'batch',
+          filename: file.name,
+        },
+      });
 
-    return {
-      ...result,
-      uploadMethod: 'blob',
-    };
+      return {
+        ...result,
+        uploadMethod: 'blob',
+      };
+    } catch (blobError) {
+      console.warn(`[Batch] Blob upload failed for ${file.name}, compressing and using traditional upload:`, blobError);
+
+      // Compress file and fall back to traditional upload
+      file = await prepareFileForBatchUpload(file, {
+        maxSizeMB: 2,
+        maxWidthOrHeight: 4096,
+        quality: 0.75,
+      });
+
+      console.log(`[Batch] Compressed ${file.name} to ${formatFileSize(file.size)}`);
+    }
   }
 
   // Use traditional upload for smaller files

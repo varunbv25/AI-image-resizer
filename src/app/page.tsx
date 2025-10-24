@@ -63,6 +63,8 @@ function HomeContent() {
   const [selectedMode, setSelectedMode] = useState<Mode>(null);
   const [processedImageData, setProcessedImageData] = useState<string | null>(null); // Base64 data of processed image
   const [processedImageMeta, setProcessedImageMeta] = useState<{filename: string, mimetype: string} | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Sync state with URL on mount and when URL changes
   useEffect(() => {
@@ -81,9 +83,34 @@ function HomeContent() {
     }
   }, [searchParams, uploadedFiles.length]);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(progressInterval);
+            return 95;
+          }
+          return prev + 5;
+        });
+      }, 100);
+
+      // Small delay to show progress
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      // Wait a moment to show 100%
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       setUploadedFiles(acceptedFiles);
+      setIsUploading(false);
+      setUploadProgress(0);
       setCurrentStep('mode-selection');
       // Update URL with new step
       router.push('/?step=mode-selection');
@@ -102,6 +129,24 @@ function HomeContent() {
   });
 
   const handleModeSelect = (mode: Mode) => {
+    // Check file size restrictions for certain modes
+    const maxSizeForMode = 3 * 1024 * 1024; // 3MB
+    const restrictedModes: Mode[] = ['ai-crop', 'enhancement'];
+
+    if (restrictedModes.includes(mode)) {
+      // Check if any file exceeds 3MB
+      const hasOversizedFile = uploadedFiles.some(file => file.size > maxSizeForMode);
+
+      if (hasOversizedFile) {
+        const modeNames = {
+          'ai-crop': 'Generative Expand',
+          'enhancement': 'Enhancement'
+        };
+        alert(`${modeNames[mode as 'ai-crop' | 'enhancement']} mode only supports files under 3MB. Please use a smaller file or try compression mode first.`);
+        return;
+      }
+    }
+
     setSelectedMode(mode);
     setCurrentStep('processing');
     // Update URL with mode
@@ -256,47 +301,89 @@ function HomeContent() {
                   ? 'border-blue-500 bg-blue-50 scale-105'
                   : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
                 }
+                ${isUploading ? 'pointer-events-none opacity-75' : ''}
               `}
             >
-              <input {...getInputProps()} />
-              <motion.div
-                animate={isDragActive ? { scale: 1.1 } : { scale: 1 }}
-                className="flex flex-col items-center gap-6"
-              >
+              <input {...getInputProps()} disabled={isUploading} />
+
+              {isUploading ? (
                 <motion.div
-                  animate={{
-                    y: [0, -10, 0],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                  className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center gap-6 w-full max-w-md"
                 >
-                  <Sparkles className="h-10 w-10 text-white" />
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center"
+                  >
+                    <Sparkles className="h-10 w-10 text-white" />
+                  </motion.div>
+
+                  <div className="space-y-3 text-center w-full">
+                    <h3 className="text-xl font-semibold text-gray-800">
+                      Uploading...
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Supports JPEG, PNG, WebP and SVG • Multiple files supported
+                    </p>
+
+                    <div className="space-y-2 mt-4">
+                      <div className="flex justify-between text-xs text-gray-600">
+                        <span>Upload Progress</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <motion.div
+                          className="bg-gradient-to-r from-blue-500 to-purple-600 h-2.5 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${uploadProgress}%` }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
-
-                <div className="space-y-2 text-center">
-                  <h3 className="text-xl font-semibold text-gray-800">
-                    {isDragActive ? 'Drop your images here' : 'Upload Your Images'}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    Drag and drop images or click to browse
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Supports JPEG, PNG, WebP and SVG • Multiple files supported
-                  </p>
-                </div>
-
-                <Button
-                  variant="outline"
-                  type="button"
-                  className="mt-3 border-2 hover:border-blue-500 hover:text-blue-600 transition-all"
+              ) : (
+                <motion.div
+                  animate={isDragActive ? { scale: 1.1 } : { scale: 1 }}
+                  className="flex flex-col items-center gap-6"
                 >
-                  Choose Files
-                </Button>
-              </motion.div>
+                  <motion.div
+                    animate={{
+                      y: [0, -10, 0],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                    className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center"
+                  >
+                    <Sparkles className="h-10 w-10 text-white" />
+                  </motion.div>
+
+                  <div className="space-y-2 text-center">
+                    <h3 className="text-xl font-semibold text-gray-800">
+                      {isDragActive ? 'Drop your images here' : 'Upload Your Images'}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Drag and drop images or click to browse
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Supports JPEG, PNG, WebP and SVG • Multiple files supported
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="mt-3 border-2 hover:border-blue-500 hover:text-blue-600 transition-all"
+                  >
+                    Choose Files
+                  </Button>
+                </motion.div>
+              )}
             </div>
           </Card>
         </motion.div>
@@ -417,16 +504,25 @@ function HomeContent() {
           <div className={`grid grid-cols-1 md:grid-cols-2 ${isBatchUpload ? 'lg:grid-cols-3' : 'lg:grid-cols-5'} gap-4`}>
             {availableModes.map(([key, config], index) => {
               const Icon = config.icon;
+              const maxSizeForMode = 3 * 1024 * 1024; // 3MB
+              const restrictedModes: Mode[] = ['ai-crop', 'enhancement'];
+              const isRestricted = restrictedModes.includes(key as Mode);
+              const hasOversizedFile = isRestricted && uploadedFiles.some(file => file.size > maxSizeForMode);
+
               return (
                 <motion.div
                   key={key}
                   variants={cardVariants}
-                  whileHover="hover"
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={hasOversizedFile ? undefined : "hover"}
+                  whileTap={hasOversizedFile ? undefined : { scale: 0.95 }}
                   custom={index}
                 >
                   <Card
-                    className={`cursor-pointer border-2 hover:border-${config.color}-300 h-full flex flex-col transition-all duration-300 shadow-lg hover:shadow-2xl`}
+                    className={`cursor-pointer border-2 h-full flex flex-col transition-all duration-300 shadow-lg ${
+                      hasOversizedFile
+                        ? 'opacity-50 cursor-not-allowed border-gray-300'
+                        : `hover:border-${config.color}-300 hover:shadow-2xl`
+                    }`}
                     onClick={() => handleModeSelect(key as Mode)}
                   >
                     <CardHeader className="text-center pb-3 pt-4">
@@ -445,13 +541,25 @@ function HomeContent() {
                       <p className="text-gray-600 mb-3 text-xs leading-snug">
                         {config.description}
                       </p>
+                      {hasOversizedFile && (
+                        <div className="mb-3 px-2 py-1.5 bg-red-50 border border-red-200 rounded text-xs text-red-600">
+                          ⚠️ File too large (max 3MB)
+                        </div>
+                      )}
                       <ul className="text-xs text-gray-500 space-y-0.5 mb-4 flex-grow text-left">
                         {config.features.map((feature, i) => (
                           <li key={i} className="leading-tight">• {feature}</li>
                         ))}
                       </ul>
-                      <Button className={`w-full bg-${config.color}-600 hover:bg-${config.color}-700 mt-auto text-sm py-1.5`}>
-                        Select
+                      <Button
+                        disabled={hasOversizedFile}
+                        className={`w-full mt-auto text-sm py-1.5 ${
+                          hasOversizedFile
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : `bg-${config.color}-600 hover:bg-${config.color}-700`
+                        }`}
+                      >
+                        {hasOversizedFile ? 'Unavailable' : 'Select'}
                       </Button>
                     </CardContent>
                   </Card>

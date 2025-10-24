@@ -42,23 +42,39 @@ export function useFileUpload() {
 
       // Check if file should use blob upload (bypassing the 4.5MB Vercel limit)
       if (shouldUseBlobUpload(originalSize)) {
-        console.log('Using Vercel Blob client upload for large file...');
+        console.log('Attempting Vercel Blob client upload for large file...');
 
-        const result = await uploadToBlob(file, {
-          onProgress: (progress) => {
-            setUploadProgress(progress);
-          },
-        });
+        try {
+          const result = await uploadToBlob(file, {
+            onProgress: (progress) => {
+              setUploadProgress(progress);
+            },
+          });
 
-        setUploadedImage({
-          filename: result.filename,
-          originalDimensions: result.originalDimensions,
-          size: result.size,
-          mimetype: result.mimetype,
-          imageData: result.imageData,
-        });
+          setUploadedImage({
+            filename: result.filename,
+            originalDimensions: result.originalDimensions,
+            size: result.size,
+            mimetype: result.mimetype,
+            imageData: result.imageData,
+          });
 
-        return;
+          return;
+        } catch (blobError) {
+          // If blob upload fails (e.g., not configured), fall back to compression + traditional upload
+          console.warn('Blob upload failed, falling back to compression:', blobError);
+          console.log('Compressing large file for traditional upload...');
+
+          // Compress the file to fit within limits
+          file = await compressImage(file, {
+            maxSizeMB: 2,
+            maxWidthOrHeight: 4096,
+            quality: 0.75,
+          });
+
+          console.log(`Compressed to: ${formatFileSize(file.size)}`);
+          // Continue to traditional upload below
+        }
       }
 
       // For smaller files, use the traditional upload method

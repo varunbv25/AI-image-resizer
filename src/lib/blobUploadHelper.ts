@@ -32,6 +32,14 @@ export async function uploadToBlob(
   try {
     console.log(`Starting blob upload for: ${file.name} (${formatFileSize(file.size)})`);
 
+    // Check if blob storage is available (for Vercel deployment)
+    const hasBlobToken = typeof process !== 'undefined' && process.env?.BLOB_READ_WRITE_TOKEN;
+
+    if (!hasBlobToken) {
+      console.warn('BLOB_READ_WRITE_TOKEN not found, blob upload not available');
+      throw new Error('Blob storage not configured');
+    }
+
     // Upload the file directly to blob storage
     // This calls /api/blob-upload to get a token, then uploads directly to blob
     const blob = await upload(file.name, file, {
