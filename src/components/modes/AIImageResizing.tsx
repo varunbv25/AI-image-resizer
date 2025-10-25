@@ -886,7 +886,14 @@ function AIImageResizingContent({
   const handleProcess = () => {
     if (!uploadedImage) return;
 
-    processImage(uploadedImage.imageData, targetDimensions);
+    // Pass blob URL if available (for large files >3MB)
+    if (uploadedImage.blobUrl) {
+      processImage(uploadedImage.imageData, targetDimensions, {
+        blobUrl: uploadedImage.blobUrl,
+      });
+    } else {
+      processImage(uploadedImage.imageData, targetDimensions);
+    }
   };
 
   const handleReset = () => {

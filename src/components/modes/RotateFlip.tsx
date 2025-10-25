@@ -412,32 +412,44 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
         operation = 'custom';
       }
 
-      // Check if we should use blob workflow (file > 3MB)
+      // Check if we should use blob workflow (file > 3MB OR blob URL already exists)
       const SIZE_THRESHOLD = 3 * 1024 * 1024; // 3MB
       const originalFile = originalFileRef.current;
-      const usesBlobWorkflow = originalFile && originalFile.size > SIZE_THRESHOLD;
+      const hasExistingBlobUrl = uploadedImage && uploadedImage.blobUrl;
+      const usesBlobWorkflow = hasExistingBlobUrl || (originalFile && originalFile.size > SIZE_THRESHOLD);
 
       let result;
 
-      if (usesBlobWorkflow && originalFile) {
+      if (usesBlobWorkflow) {
         // BLOB WORKFLOW for large files
-        console.log('🚀 Using blob workflow with server-side sharp.js for large file');
+        console.log('🚀 Using blob workflow with server-side sharp.js');
 
-        // Step 1: Upload file to Vercel Blob
-        const blob = await upload(originalFile.name, originalFile, {
-          access: 'public',
-          handleUploadUrl: '/api/get-upload-token',
-          multipart: true,
-        });
+        let blobUrl: string;
 
-        console.log('File uploaded to blob:', blob.url);
+        if (hasExistingBlobUrl && uploadedImage.blobUrl) {
+          // Use existing blob URL (file already uploaded during initial upload)
+          console.log('✅ Using existing blob URL:', uploadedImage.blobUrl);
+          blobUrl = uploadedImage.blobUrl;
+        } else if (originalFile) {
+          // Upload file to Vercel Blob (fallback for older workflow)
+          console.log('⬆️  Uploading file to blob...', originalFile.size);
+          const blob = await upload(originalFile.name, originalFile, {
+            access: 'public',
+            handleUploadUrl: '/api/get-upload-token',
+            multipart: true,
+          });
+          blobUrl = blob.url;
+          console.log('File uploaded to blob:', blobUrl);
+        } else {
+          throw new Error('No blob URL or file available for processing');
+        }
 
-        // Step 2: Request processing with blob URL
+        // Request processing with blob URL (no file upload needed!)
         const response = await fetch('/api/process-from-blob', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            blobUrl: blob.url,
+            blobUrl: blobUrl,
             operation: 'rotate-flip',
             params: {
               operation,

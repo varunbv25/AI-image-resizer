@@ -554,24 +554,34 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       const originalFile = originalFileRef.current;
       console.log('Original size:', (originalFile.size / 1024 / 1024).toFixed(2), 'MB');
 
-      // Check if we should use blob workflow (file > 3MB)
+      // Check if we should use blob workflow (file > 3MB OR blob URL already exists)
       const SIZE_THRESHOLD = 3 * 1024 * 1024; // 3MB
-      const usesBlobWorkflow = originalFile.size > SIZE_THRESHOLD;
+      const hasExistingBlobUrl = uploadedImage && uploadedImage.blobUrl;
+      const usesBlobWorkflow = hasExistingBlobUrl || originalFile.size > SIZE_THRESHOLD;
 
       if (usesBlobWorkflow) {
         // BLOB WORKFLOW for large files
-        console.log('🚀 Using blob workflow with server-side sharp.js for large file');
+        console.log('🚀 Using blob workflow with server-side sharp.js');
 
-        // Step 1: Upload file to Vercel Blob
-        const blob = await upload(originalFile.name, originalFile, {
-          access: 'public',
-          handleUploadUrl: '/api/get-upload-token',
-          multipart: true,
-        });
+        let blobUrl: string;
 
-        console.log('File uploaded to blob:', blob.url);
+        if (hasExistingBlobUrl && uploadedImage.blobUrl) {
+          // Use existing blob URL (file already uploaded during initial upload)
+          console.log('✅ Using existing blob URL:', uploadedImage.blobUrl);
+          blobUrl = uploadedImage.blobUrl;
+        } else {
+          // Upload file to Vercel Blob (fallback for older workflow)
+          console.log('⬆️  Uploading file to blob...', originalFile.size);
+          const blob = await upload(originalFile.name, originalFile, {
+            access: 'public',
+            handleUploadUrl: '/api/get-upload-token',
+            multipart: true,
+          });
+          blobUrl = blob.url;
+          console.log('File uploaded to blob:', blobUrl);
+        }
 
-        // Step 2: Request processing with blob URL
+        // Request processing with blob URL (no file upload needed!)
         const targetSizeKB = compressionMode === 'filesize'
           ? maxFileSizeKB
           : Math.round((originalFile.size / 1024) * (maxFileSize / 100));
@@ -580,7 +590,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            blobUrl: blob.url,
+            blobUrl: blobUrl,
             operation: 'compress',
             params: {
               targetSizeKB,

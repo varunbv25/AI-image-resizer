@@ -27,11 +27,12 @@ export function useImageProcessing() {
 
   const processImage = useCallback(
     async (
-      imageData: string,
+      imageDataOrBlobUrl: string,
       targetDimensions: ImageDimensions,
       options: {
         quality?: number;
         format?: 'jpeg' | 'png' | 'webp';
+        blobUrl?: string; // Pass blob URL for large files
       } = {}
     ) => {
       setIsProcessing(true);
@@ -49,18 +50,34 @@ export function useImageProcessing() {
           message: 'Processing image...',
         });
 
+        // Prepare request body - use blobUrl if provided, otherwise use imageData
+        const requestBody: {
+          imageData?: string;
+          blobUrl?: string;
+          targetDimensions: ImageDimensions;
+          quality: number;
+          format: string;
+          strategy: { type: 'ai' };
+        } = {
+          targetDimensions,
+          quality: options.quality || 80,
+          format: options.format || 'jpeg',
+          strategy: { type: 'ai' },
+        };
+
+        if (options.blobUrl) {
+          console.log('🚀 Using blob URL for processing (large file)');
+          requestBody.blobUrl = options.blobUrl;
+        } else {
+          requestBody.imageData = imageDataOrBlobUrl;
+        }
+
         const response = await fetch('/api/process', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            imageData,
-            targetDimensions,
-            quality: options.quality || 80,
-            format: options.format || 'jpeg',
-            strategy: { type: 'ai' },
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         const result: APIResponse<ProcessedImageData> = await safeJsonParse(response);

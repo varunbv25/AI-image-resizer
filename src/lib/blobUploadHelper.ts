@@ -9,6 +9,13 @@ export interface BlobUploadResult {
   imageData: string;
 }
 
+export interface SimpleBlobUploadResult {
+  blobUrl: string;
+  filename: string;
+  size: number;
+  mimetype: string;
+}
+
 export interface BlobUploadOptions {
   onProgress?: (progress: number) => void;
   clientPayload?: Record<string, unknown>;
@@ -97,6 +104,55 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
+
+/**
+ * Upload a file directly to Vercel Blob storage for processing.
+ * This function ONLY uploads the file and returns the blob URL.
+ * No processing happens here - the file stays in blob storage for server-side processing.
+ *
+ * @param file - The file to upload
+ * @param options - Upload options including progress callback
+ * @returns Blob URL and basic file metadata
+ */
+export async function uploadToBlobSimple(
+  file: File,
+  options: BlobUploadOptions = {}
+): Promise<SimpleBlobUploadResult> {
+  const { onProgress } = options;
+
+  try {
+    console.log(`[SimpleBlobUpload] Starting upload: ${file.name} (${formatFileSize(file.size)})`);
+
+    // Upload the file directly to blob storage
+    // Uses /api/get-upload-token to get a token, then uploads directly to Vercel Blob
+    const blob = await upload(file.name, file, {
+      access: 'public',
+      handleUploadUrl: '/api/get-upload-token',
+      multipart: true, // Required for large files
+      onUploadProgress: onProgress
+        ? ({ loaded, total }) => {
+            const progress = Math.round((loaded / total) * 100);
+            onProgress(progress);
+          }
+        : undefined,
+    });
+
+    console.log(`[SimpleBlobUpload] Upload completed: ${blob.url}`);
+
+    return {
+      blobUrl: blob.url,
+      filename: file.name,
+      size: file.size,
+      mimetype: file.type,
+    };
+
+  } catch (error) {
+    console.error('[SimpleBlobUpload] Upload error:', error);
+    throw new Error(
+      `Blob upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
 }
 
 /**
