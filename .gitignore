@@ -37,3 +37,4 @@ next-env.d.ts
 
 # md files
 CLAUDE.md
+.env*.local
