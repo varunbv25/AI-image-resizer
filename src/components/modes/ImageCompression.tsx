@@ -13,7 +13,7 @@ import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle, Edit
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
-import { compressImageClientSide, downloadBlob } from '@/lib/clientSideCompression';
+import { compressImageClientSide } from '@/lib/clientSideCompression';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDialog';
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';

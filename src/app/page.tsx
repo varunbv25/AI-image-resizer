@@ -62,8 +62,6 @@ function HomeContent() {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [selectedMode, setSelectedMode] = useState<Mode>(null);
-  const [processedImageData, setProcessedImageData] = useState<string | null>(null); // Base64 data of processed image
-  const [processedImageMeta, setProcessedImageMeta] = useState<{filename: string, mimetype: string} | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -164,8 +162,6 @@ function HomeContent() {
     } else if (currentStep === 'mode-selection') {
       setCurrentStep('upload');
       setUploadedFiles([]);
-      setProcessedImageData(null);
-      setProcessedImageMeta(null);
       router.push('/');
     }
   };
@@ -182,9 +178,7 @@ function HomeContent() {
     const blob = new Blob([ab], { type: metadata.mimetype });
     const file = new File([blob], metadata.filename, { type: metadata.mimetype });
 
-    // Store processed image data and metadata
-    setProcessedImageData(imageData);
-    setProcessedImageMeta(metadata);
+    // Set the converted file as uploaded file
     setUploadedFiles([file]);
     setCurrentStep('mode-selection');
     setSelectedMode(null);
@@ -195,8 +189,6 @@ function HomeContent() {
     setCurrentStep('upload');
     setUploadedFiles([]);
     setSelectedMode(null);
-    setProcessedImageData(null);
-    setProcessedImageMeta(null);
     router.push('/');
   };
 

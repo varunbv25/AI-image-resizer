@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { ImageDimensions, APIResponse } from '@/types';
+import { ImageDimensions } from '@/types';
 import { upload } from '@vercel/blob/client';
 import { validateImageFile } from '@/lib/fileValidation';
 

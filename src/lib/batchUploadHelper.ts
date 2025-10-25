@@ -5,7 +5,7 @@
  */
 
 import { compressImage, formatFileSize, calculateCompressionRatio } from './clientImageCompression';
-import { uploadToBlob, shouldUseBlobUpload, BlobUploadResult } from './blobUploadHelper';
+import { uploadToBlob, shouldUseBlobUpload } from './blobUploadHelper';
 import { ImageDimensions } from '@/types';
 
 /**
