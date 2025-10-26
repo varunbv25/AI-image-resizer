@@ -250,7 +250,8 @@ export async function POST(req: NextRequest) {
 
     // Convert buffer to base64
     const base64Image = finalBuffer.toString('base64');
-    const mimeType = `image/${format === 'jpg' ? 'jpeg' : format}`;
+    // Sharp always returns standard format names (e.g., 'jpeg', not 'jpg')
+    const mimeType = `image/${format}`;
     const compressedImageData = `data:${mimeType};base64,${base64Image}`;
 
     // Clean up blob if it was used

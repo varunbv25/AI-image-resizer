@@ -21,8 +21,8 @@ import { CancelDialog } from '@/components/CancelDialog';
 import { upload } from '@vercel/blob/client';
 
 // Helper function to extract format from mimetype
-const getFormatFromMimetype = (mimetype: string): string => {
-  const formatMap: Record<string, string> = {
+const getFormatFromMimetype = (mimetype: string): 'jpeg' | 'png' | 'webp' | 'svg' => {
+  const formatMap: Record<string, 'jpeg' | 'png' | 'webp' | 'svg'> = {
     'image/jpeg': 'jpeg',
     'image/jpg': 'jpeg',
     'image/png': 'png',
