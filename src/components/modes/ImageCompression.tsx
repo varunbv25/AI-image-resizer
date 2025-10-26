@@ -9,7 +9,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { BatchItem } from '@/components/BatchProcessor';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, RotateCcw, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
+import { Download, FileArchive, Info, Check, Clock, AlertCircle, Edit2, X } from 'lucide-react';
 import JSZip from 'jszip';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import { prepareFilesForBatchUpload } from '@/lib/batchUploadHelper';
@@ -48,7 +48,7 @@ interface CompressionSettings {
 export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompressionProps) {
   const [compressionMode, setCompressionMode] = useState<'quality' | 'filesize'>('quality');
   const [quality, setQuality] = useState<number>(80); // quality percentage (0-100)
-  const [maxFileSize, setMaxFileSize] = useState<number>(40); // percentage of original
+  const [maxFileSize] = useState<number>(40); // percentage of original (fixed value, not user-configurable)
   const [maxFileSizeKB, setMaxFileSizeKB] = useState<number>(500); // KB
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressedImage, setCompressedImage] = useState<{
@@ -559,6 +559,8 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
   const handleCompress = async () => {
     if (!uploadedImage || !originalFileRef.current) return;
 
+    // Clear previous compressed image to allow retry
+    setCompressedImage(null);
     setIsCompressing(true);
     setCompressionError('');
 
@@ -722,22 +724,6 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       console.error('Download error:', error);
       alert(error instanceof Error ? error.message : 'Download failed');
     }
-  };
-
-  const handleReset = () => {
-    resetUpload();
-    setCompressedImage(null);
-    setCompressionError('');
-    setMaxFileSize(40);
-    setQuality(80);
-    setMaxFileSizeKB(500);
-    setCompressionMode('quality');
-    setComparisonPosition(50);
-    setIsBatchMode(false);
-    setBatchItems([]);
-    setUploadedFiles([]);
-    setSelectedImageId(null);
-    setBatchProcessingStarted(false);
   };
 
   const handleDownloadAll = async () => {
@@ -1057,12 +1043,8 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
             >
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
+                  <CardTitle>
                     <span>Images ({batchItems.length})</span>
-                    <Button variant="outline" size="sm" onClick={handleReset}>
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Reset
-                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1499,12 +1481,8 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           >
             <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
+                  <CardTitle>
                     Image Uploaded
-                    <Button variant="outline" size="sm" onClick={handleReset}>
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Reset
-                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1634,11 +1612,10 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
             ) : (
               <Button
                 onClick={handleCompress}
-                disabled={!!compressedImage}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 size="lg"
               >
-                {compressedImage ? 'Already Compressed ✓' : 'Apply Compression'}
+                {compressedImage ? 'Retry Compression' : 'Apply Compression'}
               </Button>
             )}
 
@@ -1664,7 +1641,8 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                       if (onEditAgain && compressedImage && uploadedImage) {
                         // Pass the compressed image to edit again with a different mode
                         const mimeType = uploadedImage.mimetype || 'image/jpeg';
-                        const imageData = `data:${mimeType};base64,${compressedImage.imageData}`;
+                        // compressedImage.imageData is already a complete data URL
+                        const imageData = compressedImage.imageData;
                         onEditAgain(imageData, {
                           filename: uploadedImage.filename,
                           mimetype: mimeType

@@ -9,7 +9,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { DimensionSelector } from '@/components/DimensionSelector';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { ImageDimensions } from '@/types';
-import { Download, RotateCcw, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
+import { Download, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
 import Image from 'next/image';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import JSZip from 'jszip';
@@ -502,12 +502,8 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle>
                 <span>Images ({batchItems.length})</span>
-                <Button variant="outline" size="sm" onClick={handleReset}>
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  Reset
-                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1669,13 +1665,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                 >
                   <Card className="border-0 shadow-lg">
                     <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">Image Info</CardTitle>
-                        <Button variant="outline" size="sm" onClick={handleReset} className="h-8">
-                          <RotateCcw className="h-3 w-3 mr-1" />
-                          Reset
-                        </Button>
-                      </div>
+                      <CardTitle className="text-lg">Image Info</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div>

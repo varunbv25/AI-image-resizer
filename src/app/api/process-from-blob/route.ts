@@ -157,32 +157,43 @@ export async function POST(req: NextRequest) {
         const maxAttempts = 10;
 
         if (maxFileSizeKB) {
-          // Target specific file size in KB
-          const targetSize = maxFileSizeKB * 1024;
-          console.log(`[Process] Compressing to target size: ${maxFileSizeKB}KB`);
+          // Target specific file size in KB (actual KB, not percentage)
+          const targetSizeKB = maxFileSizeKB;
+          const targetWithTolerance = targetSizeKB * 1.05; // Allow up to 5% over target
+
+          console.log(`[Process] Target: ${targetSizeKB} KB; Original: ${originalSize ? (originalSize / 1024).toFixed(2) : 'unknown'} KB`);
+
+          // Start with high quality
+          currentQuality = 90;
 
           while (attempts < maxAttempts) {
             let testInstance = sharp(workingBuffer, { limitInputPixels: 1000000000 });
 
             switch (format) {
               case 'jpeg':
-                testInstance = testInstance.jpeg({ quality: currentQuality, mozjpeg: true, progressive: true });
+                testInstance = testInstance.jpeg({ quality: currentQuality, mozjpeg: true, progressive: true, chromaSubsampling: '4:2:0' });
                 break;
               case 'png':
                 testInstance = testInstance.png({ compressionLevel: 9, palette: true });
                 break;
               case 'webp':
-                testInstance = testInstance.webp({ quality: currentQuality });
+                testInstance = testInstance.webp({ quality: currentQuality, effort: 6 });
                 break;
             }
 
             processedBuffer = await testInstance.toBuffer();
+            const currentSizeKB = processedBuffer.length / 1024;
 
-            if (processedBuffer.length <= targetSize || currentQuality <= 10) {
+            console.log(`[Process] Attempt ${attempts + 1}: Quality ${currentQuality}, Size ${currentSizeKB.toFixed(2)} KB (${((currentSizeKB / targetSizeKB) * 100).toFixed(1)}% of target)`);
+
+            // Stop if within 5% tolerance or reached minimum quality
+            if (currentSizeKB <= targetWithTolerance || currentQuality <= 10) {
+              console.log(`[Process] Final: ${currentSizeKB.toFixed(2)} KB at quality ${currentQuality}`);
               break;
             }
 
-            currentQuality = Math.max(10, currentQuality - 10);
+            currentQuality -= 5;
+            currentQuality = Math.max(10, currentQuality);
             attempts++;
           }
         } else if (maxFileSizePercent && originalSize) {

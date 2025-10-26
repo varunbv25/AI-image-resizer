@@ -10,7 +10,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, RotateCcw, Sparkles, Info, X, Edit2 } from 'lucide-react';
+import { Download, Sparkles, Info, X, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ONNXImageEnhancer } from '@/lib/onnxInference';
 import JSZip from 'jszip';
@@ -744,16 +744,8 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
               >
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
+                    <CardTitle>
                       Image Uploaded
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleReset}
-                      >
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Reset
-                      </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>

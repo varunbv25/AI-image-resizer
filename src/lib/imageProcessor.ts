@@ -1145,7 +1145,7 @@ Return the enhanced version of this image with improved sharpness and clarity. D
       ];
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.5-flash-image',
         contents: prompt,
       });
 

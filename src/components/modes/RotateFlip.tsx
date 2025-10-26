@@ -852,12 +852,8 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
             <motion.div className="space-y-3">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
+                  <CardTitle>
                     Image Uploaded
-                    <Button variant="outline" size="sm" onClick={handleReset}>
-                      <ResetIcon className="h-4 w-4 mr-2" />
-                      Reset
-                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>

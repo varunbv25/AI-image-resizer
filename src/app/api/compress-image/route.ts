@@ -149,36 +149,32 @@ export async function POST(req: NextRequest) {
     }
     // Mode 2: Target file size in KB
     else if (maxFileSizeKB !== undefined && maxFileSizeKB !== null) {
-      const targetSize = maxFileSizeKB * 1024; // Convert KB to bytes
+      const targetSizeKB = maxFileSizeKB; // Target in KB (actual KB, not percentage)
+      const targetWithTolerance = targetSizeKB * 1.05; // Allow up to 5% over target
+
+      console.log(`Target: ${targetSizeKB} KB; Original: ${(originalSize / 1024).toFixed(2)} KB`);
 
       // Initial compression attempt with high quality
       currentQuality = 90;
       compressedBuffer = await compressImage(buffer, format, currentQuality);
 
-      // Iteratively reduce quality to reach target size
-      let attempts = 0;
-      const maxAttempts = 20;
+      console.log(`Initial compression: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB`);
 
-      // Use smaller steps for more precise compression
-      while (compressedBuffer.length > targetSize && currentQuality > 30 && attempts < maxAttempts) {
-        // Reduce quality by 5 for finer control
-        currentQuality = Math.max(30, currentQuality - 5);
+      // Iteratively lower quality until within ~5% of target
+      let attempts = 0;
+      while (compressedBuffer.length / 1024 > targetWithTolerance && currentQuality > 10) {
+        currentQuality -= 5;
         compressedBuffer = await compressImage(buffer, format, currentQuality);
         attempts++;
 
-        console.log(`Compression attempt ${attempts}: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB / Target ${maxFileSizeKB} KB`);
+        const currentSizeKB = compressedBuffer.length / 1024;
+        const percentOfTarget = ((currentSizeKB / targetSizeKB) * 100).toFixed(1);
+        console.log(`Attempt ${attempts}: Quality ${currentQuality}, Size ${currentSizeKB.toFixed(2)} KB (${percentOfTarget}% of target)`);
       }
 
-      // If still too large, try more aggressive compression
-      if (compressedBuffer.length > targetSize && currentQuality > 10) {
-        while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
-          currentQuality = Math.max(10, currentQuality - 5);
-          compressedBuffer = await compressImage(buffer, format, currentQuality);
-          attempts++;
-
-          console.log(`Aggressive compression attempt ${attempts}: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB / Target ${maxFileSizeKB} KB`);
-        }
-      }
+      const finalSizeKB = compressedBuffer.length / 1024;
+      const finalPercent = ((finalSizeKB / targetSizeKB) * 100).toFixed(1);
+      console.log(`Final result: ${finalSizeKB.toFixed(2)} KB (${finalPercent}% of target ${targetSizeKB} KB) at quality ${currentQuality}`);
     }
     // Mode 3: Target size as percentage
     else if (maxFileSizePercent !== undefined && maxFileSizePercent !== null) {
