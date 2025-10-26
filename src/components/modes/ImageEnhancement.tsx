@@ -10,7 +10,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { BatchProcessor, BatchItem } from '@/components/BatchProcessor';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
 import { useFileUpload } from '@/hooks/useFileUpload';
-import { Download, Sparkles, Info, X, Edit2 } from 'lucide-react';
+import { Download, Sparkles, Info, X, Edit2, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ONNXImageEnhancer } from '@/lib/onnxInference';
 import JSZip from 'jszip';
@@ -892,35 +892,48 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
                 )}
 
                 {enhancedImage && !isProcessing && (
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleDownload}
-                      className="flex-1 bg-green-600 hover:bg-green-700"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
+                  <div className="space-y-2">
                     <Button
                       onClick={() => {
-                        if (onEditAgain && enhancedImage && uploadedImage) {
-                          // Pass the enhanced image to edit again with a different mode
-                          const mimeType = enhancedImage.metadata.format === 'svg' ? 'image/svg+xml' : `image/${enhancedImage.metadata.format}`;
-                          const imageData = `data:${mimeType};base64,${enhancedImage.imageData}`;
-                          onEditAgain(imageData, {
-                            filename: uploadedImage.filename,
-                            mimetype: mimeType
-                          });
-                        } else {
-                          // Fallback to go back
-                          onBack();
-                        }
+                        // Retry: Clear previous enhancement and allow re-enhancement
+                        setEnhancedImage(null);
+                        setProcessingStatus({ stage: 'idle', progress: 0, message: '' });
                       }}
-                      variant="outline"
-                      className="flex-1"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700"
                     >
-                      <Edit2 className="h-4 w-4 mr-2" />
-                      Edit Again
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Retry Enhancement
                     </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleDownload}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (onEditAgain && enhancedImage && uploadedImage) {
+                            // Pass the enhanced image to edit again with a different mode
+                            const mimeType = enhancedImage.metadata.format === 'svg' ? 'image/svg+xml' : `image/${enhancedImage.metadata.format}`;
+                            const imageData = `data:${mimeType};base64,${enhancedImage.imageData}`;
+                            onEditAgain(imageData, {
+                              filename: uploadedImage.filename,
+                              mimetype: mimeType
+                            });
+                          } else {
+                            // Fallback to go back
+                            onBack();
+                          }
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Edit Again
+                      </Button>
+                    </div>
                   </div>
                 )}
               </motion.div>

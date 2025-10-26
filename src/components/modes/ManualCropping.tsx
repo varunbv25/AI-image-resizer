@@ -9,7 +9,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { DimensionSelector } from '@/components/DimensionSelector';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { ImageDimensions } from '@/types';
-import { Download, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2 } from 'lucide-react';
+import { Download, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2, RotateCcw } from 'lucide-react';
 import Image from 'next/image';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 import JSZip from 'jszip';
@@ -1742,12 +1742,22 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                     </Button>
                   ) : (
                     <Button
-                      onClick={handleCrop}
-                      disabled={!!croppedImageUrl}
+                      onClick={() => {
+                        if (croppedImageUrl) {
+                          // Retry: Clear previous crop and allow re-cropping
+                          setCroppedImageUrl(null);
+                          setCroppedImageData(null);
+                        } else {
+                          handleCrop();
+                        }
+                      }}
                       className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
                     >
                       {croppedImageUrl ? (
-                        <>Cropped ✓</>
+                        <>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Retry Crop
+                        </>
                       ) : (
                         <>
                           <Scissors className="h-4 w-4 mr-2" />

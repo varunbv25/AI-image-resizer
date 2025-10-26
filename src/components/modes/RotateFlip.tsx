@@ -950,35 +950,48 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
                 ) : processedMetadata ? (
                   <div className="space-y-2">
                     <Button
-                      onClick={handleDownload}
+                      onClick={() => {
+                        // Retry: Clear previous transformation and allow re-transformation
+                        setProcessedImage(null);
+                        setProcessedMetadata(null);
+                      }}
                       className="w-full bg-teal-600 hover:bg-teal-700 flex items-center justify-center gap-2"
                     >
-                      <Download className="h-4 w-4" />
-                      Download
+                      <RotateCcw className="h-4 w-4" />
+                      Retry Transform
                     </Button>
-                    <Button
-                      onClick={() => {
-                        if (onEditAgain && processedImage && uploadedImage) {
-                          // Pass the processed image to edit again with a different mode
-                          const mimeType = uploadedImage.mimetype; // Use original format
-                          const imageData = `data:${mimeType};base64,${processedImage}`;
-                          onEditAgain(imageData, {
-                            filename: uploadedImage.filename,
-                            mimetype: mimeType
-                          });
-                        } else {
-                          // Fallback to reset
-                          setProcessedImage(null);
-                          setProcessedMetadata(null);
-                          resetUpload();
-                        }
-                      }}
-                      variant="outline"
-                      className="w-full border-blue-300 text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                      Edit Again
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleDownload}
+                        className="flex-1 bg-green-600 hover:bg-green-700 flex items-center justify-center gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (onEditAgain && processedImage && uploadedImage) {
+                            // Pass the processed image to edit again with a different mode
+                            const mimeType = uploadedImage.mimetype; // Use original format
+                            const imageData = `data:${mimeType};base64,${processedImage}`;
+                            onEditAgain(imageData, {
+                              filename: uploadedImage.filename,
+                              mimetype: mimeType
+                            });
+                          } else {
+                            // Fallback to reset
+                            setProcessedImage(null);
+                            setProcessedMetadata(null);
+                            resetUpload();
+                          }
+                        }}
+                        variant="outline"
+                        className="flex-1 border-blue-300 text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        Edit Again
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <Button

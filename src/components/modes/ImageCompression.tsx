@@ -607,8 +607,10 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
             blobUrl: blobUrl,
             operation: 'compress',
             params: {
-              targetSizeKB,
+              maxFileSizeKB: targetSizeKB,
               quality: compressionMode === 'quality' ? quality : undefined,
+              originalSize: originalFile.size,
+              format: getFormatFromMimetype(uploadedImage.mimetype),
             },
           }),
         });
