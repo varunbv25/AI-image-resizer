@@ -19,6 +19,18 @@ import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDi
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
 
+// Helper function to extract format from mimetype
+const getFormatFromMimetype = (mimetype: string): string => {
+  const formatMap: Record<string, string> = {
+    'image/jpeg': 'jpeg',
+    'image/jpg': 'jpeg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return formatMap[mimetype.toLowerCase()] || 'jpeg';
+};
+
 interface AIImageResizingProps {
   onBack: () => void;
   onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
@@ -225,6 +237,11 @@ function AIImageResizingBatchContent({ initialFiles }: AIImageResizingBatchConte
     ));
 
     try {
+      // Get original format from file
+      const itemIndex = batchItems.findIndex(i => i.id === id);
+      const originalFile = itemIndex !== -1 ? initialFiles[itemIndex] : null;
+      const originalFormat = originalFile ? getFormatFromMimetype(originalFile.type) : 'jpeg';
+
       const response = await fetch('/api/process', {
         method: 'POST',
         headers: {
@@ -234,7 +251,7 @@ function AIImageResizingBatchContent({ initialFiles }: AIImageResizingBatchConte
           imageData: item.imageData,
           targetDimensions: item.targetDimensions,
           quality: 80,
-          format: 'jpeg',
+          format: originalFormat,
           strategy: { type: 'ai' },
         }),
       });
@@ -886,13 +903,19 @@ function AIImageResizingContent({
   const handleProcess = () => {
     if (!uploadedImage) return;
 
+    // Get original format from uploaded image mimetype
+    const originalFormat = getFormatFromMimetype(uploadedImage.mimetype);
+
     // Pass blob URL if available (for large files >3MB)
     if (uploadedImage.blobUrl) {
       processImage(uploadedImage.imageData, targetDimensions, {
         blobUrl: uploadedImage.blobUrl,
+        format: originalFormat,
       });
     } else {
-      processImage(uploadedImage.imageData, targetDimensions);
+      processImage(uploadedImage.imageData, targetDimensions, {
+        format: originalFormat,
+      });
     }
   };
 

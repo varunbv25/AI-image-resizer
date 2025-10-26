@@ -31,7 +31,7 @@ export function useImageProcessing() {
       targetDimensions: ImageDimensions,
       options: {
         quality?: number;
-        format?: 'jpeg' | 'png' | 'webp';
+        format?: 'jpeg' | 'png' | 'webp' | 'svg';
         blobUrl?: string; // Pass blob URL for large files
       } = {}
     ) => {

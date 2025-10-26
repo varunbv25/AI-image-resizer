@@ -52,25 +52,33 @@ async function compressImage(
       return image.jpeg({
         quality: quality || 80,
         mozjpeg: true,
-        progressive: true
+        progressive: true,
+        chromaSubsampling: '4:2:0'
       }).toBuffer();
 
     case 'png':
+      // For PNG, quality parameter is used differently
+      // If quality is provided, use it to determine compression level (0-9)
+      const compressionLevel = quality !== undefined
+        ? Math.max(0, Math.min(9, Math.round((100 - quality) / 11)))
+        : 9;
       return image.png({
-        compressionLevel: 9,
+        compressionLevel,
         palette: true
       }).toBuffer();
 
     case 'webp':
       return image.webp({
-        quality: quality || 80
+        quality: quality || 80,
+        effort: 4
       }).toBuffer();
 
     default:
       return image.jpeg({
         quality: quality || 80,
         mozjpeg: true,
-        progressive: true
+        progressive: true,
+        chromaSubsampling: '4:2:0'
       }).toBuffer();
   }
 }
@@ -107,7 +115,29 @@ export async function POST(req: NextRequest) {
     const metadata = await sharp(buffer, {
       limitInputPixels: 1000000000
     }).metadata();
-    const format = metadata.format || 'jpeg';
+
+    // Preserve original format - Sharp automatically detects format from buffer
+    // Supported formats: jpeg, png, webp, gif, svg, tiff, etc.
+    let format = metadata.format || 'jpeg';
+
+    // Normalize format names (jpg -> jpeg)
+    if (format === 'jpg') {
+      format = 'jpeg';
+    }
+
+    // Handle SVG: Convert to PNG for compression since SVG is vector-based
+    const header = buffer.slice(0, 100).toString('utf-8');
+    const isSVG = header.includes('<svg') || header.includes('<?xml');
+    if (isSVG) {
+      console.log('SVG detected: Converting to PNG for compression');
+      buffer = await sharp(buffer, {
+        density: 300,
+        limitInputPixels: 1000000000
+      })
+      .png()
+      .toBuffer();
+      format = 'png';
+    }
 
     let compressedBuffer: Buffer;
     let currentQuality: number;
@@ -121,35 +151,74 @@ export async function POST(req: NextRequest) {
     else if (maxFileSizeKB !== undefined && maxFileSizeKB !== null) {
       const targetSize = maxFileSizeKB * 1024; // Convert KB to bytes
 
-      // Initial compression attempt
-      currentQuality = 80;
+      // Initial compression attempt with high quality
+      currentQuality = 90;
       compressedBuffer = await compressImage(buffer, format, currentQuality);
 
       // Iteratively reduce quality to reach target size
       let attempts = 0;
-      const maxAttempts = 10;
+      const maxAttempts = 20;
 
-      while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
-        currentQuality = Math.max(10, currentQuality - 10);
+      // Use smaller steps for more precise compression
+      while (compressedBuffer.length > targetSize && currentQuality > 30 && attempts < maxAttempts) {
+        // Reduce quality by 5 for finer control
+        currentQuality = Math.max(30, currentQuality - 5);
         compressedBuffer = await compressImage(buffer, format, currentQuality);
         attempts++;
+
+        console.log(`Compression attempt ${attempts}: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB / Target ${maxFileSizeKB} KB`);
+      }
+
+      // If still too large, try more aggressive compression
+      if (compressedBuffer.length > targetSize && currentQuality > 10) {
+        while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
+          currentQuality = Math.max(10, currentQuality - 5);
+          compressedBuffer = await compressImage(buffer, format, currentQuality);
+          attempts++;
+
+          console.log(`Aggressive compression attempt ${attempts}: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB / Target ${maxFileSizeKB} KB`);
+        }
       }
     }
-    // Mode 3: Target size as percentage (legacy support)
+    // Mode 3: Target size as percentage
     else if (maxFileSizePercent !== undefined && maxFileSizePercent !== null) {
+      // Calculate target size: if slider is at 50%, final file should be 50% of original (4MB -> 2MB)
       const targetSize = (originalSize * maxFileSizePercent) / 100;
 
-      currentQuality = 80;
+      console.log(`Target percentage: ${maxFileSizePercent}%`);
+      console.log(`Original size: ${(originalSize / 1024).toFixed(2)} KB`);
+      console.log(`Target size: ${(targetSize / 1024).toFixed(2)} KB`);
+
+      currentQuality = 90;
       compressedBuffer = await compressImage(buffer, format, currentQuality);
 
       let attempts = 0;
-      const maxAttempts = 10;
+      const maxAttempts = 20;
 
-      while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
-        currentQuality = Math.max(10, currentQuality - 10);
+      // Use smaller steps for more precise compression to hit the exact percentage
+      while (compressedBuffer.length > targetSize && currentQuality > 30 && attempts < maxAttempts) {
+        currentQuality = Math.max(30, currentQuality - 5);
         compressedBuffer = await compressImage(buffer, format, currentQuality);
         attempts++;
+
+        const currentPercent = ((compressedBuffer.length / originalSize) * 100).toFixed(1);
+        console.log(`Compression attempt ${attempts}: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB (${currentPercent}%) / Target ${(targetSize / 1024).toFixed(2)} KB (${maxFileSizePercent}%)`);
       }
+
+      // If still too large, try more aggressive compression
+      if (compressedBuffer.length > targetSize && currentQuality > 10) {
+        while (compressedBuffer.length > targetSize && currentQuality > 10 && attempts < maxAttempts) {
+          currentQuality = Math.max(10, currentQuality - 5);
+          compressedBuffer = await compressImage(buffer, format, currentQuality);
+          attempts++;
+
+          const currentPercent = ((compressedBuffer.length / originalSize) * 100).toFixed(1);
+          console.log(`Aggressive compression attempt ${attempts}: Quality ${currentQuality}, Size ${(compressedBuffer.length / 1024).toFixed(2)} KB (${currentPercent}%) / Target ${(targetSize / 1024).toFixed(2)} KB (${maxFileSizePercent}%)`);
+        }
+      }
+
+      const finalPercent = ((compressedBuffer.length / originalSize) * 100).toFixed(1);
+      console.log(`Final result: ${(compressedBuffer.length / 1024).toFixed(2)} KB (${finalPercent}% of original)`);
     }
     // Fallback
     else {

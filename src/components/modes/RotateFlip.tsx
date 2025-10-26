@@ -19,6 +19,18 @@ import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
 import { upload } from '@vercel/blob/client';
 
+// Helper function to extract format from mimetype
+const getFormatFromMimetype = (mimetype: string): string => {
+  const formatMap: Record<string, string> = {
+    'image/jpeg': 'jpeg',
+    'image/jpg': 'jpeg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return formatMap[mimetype.toLowerCase()] || 'jpeg';
+};
+
 interface ImageMetadata {
   width: number;
   height: number;
@@ -169,6 +181,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
 
     try {
       const base64 = await fileToBase64(file);
+      const originalFormat = getFormatFromMimetype(file.type);
 
       const response = await fetch('/api/rotate-flip', {
         method: 'POST',
@@ -178,7 +191,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
           operation: settings.operation,
           customAngle: settings.customAngle || 0,
           quality: Math.round(settings.quality * 100),
-          format: 'jpeg',
+          format: originalFormat,
         }),
       });
 
@@ -283,8 +296,13 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
       // Extract base64 data from data URL
       const base64Data = item.processedData.split(',')[1];
 
-      // Check if format is JPEG (current format from transformation)
-      if (format === 'jpeg') {
+      // Get original format from uploaded file
+      const itemIndex = batchItems.findIndex(i => i.id === selectedDownloadId);
+      const originalFile = itemIndex !== -1 ? uploadedFiles[itemIndex] : null;
+      const currentFormat = originalFile ? getFormatFromMimetype(originalFile.type) : 'jpeg';
+
+      // Check if format matches current format
+      if (format === currentFormat) {
         // Direct download if same format
         const link = document.createElement('a');
         link.href = item.processedData;
@@ -470,6 +488,9 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
         // TRADITIONAL API WORKFLOW for small files
         console.log('Using traditional API workflow for small file');
 
+        // Get original format from uploaded image
+        const originalFormat = getFormatFromMimetype(uploadedImage.mimetype);
+
         const response = await fetch('/api/rotate-flip', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -478,7 +499,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
             operation: operation,
             customAngle: totalAngle,
             quality: Math.round(transformSettings.quality * 100),
-            format: 'jpeg',
+            format: originalFormat,
             flipHorizontal: flipHorizontal,
             flipVertical: flipVertical,
           }),
@@ -509,11 +530,14 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
 
     setIsConverting(true);
     try {
-      // Check if format is JPEG (current format from transformation)
-      if (format === 'jpeg') {
+      // Get current format from uploaded image
+      const currentFormat = getFormatFromMimetype(uploadedImage.mimetype);
+
+      // Check if format matches current format
+      if (format === currentFormat) {
         // Direct download if same format
         const link = document.createElement('a');
-        link.href = `data:image/jpeg;base64,${processedImage}`;
+        link.href = `data:${uploadedImage.mimetype};base64,${processedImage}`;
         link.download = `transformed-${uploadedImage.filename}.${format}`;
         document.body.appendChild(link);
         link.click();
@@ -940,7 +964,7 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
                       onClick={() => {
                         if (onEditAgain && processedImage && uploadedImage) {
                           // Pass the processed image to edit again with a different mode
-                          const mimeType = 'image/jpeg'; // RotateFlip always outputs JPEG
+                          const mimeType = uploadedImage.mimetype; // Use original format
                           const imageData = `data:${mimeType};base64,${processedImage}`;
                           onEditAgain(imageData, {
                             filename: uploadedImage.filename,
@@ -1051,26 +1075,33 @@ export function RotateFlip({ onBack, onEditAgain, preUploadedFiles }: RotateFlip
           isOpen={showFormatDialog && !selectedDownloadId}
           onClose={() => setShowFormatDialog(false)}
           onDownload={handleFormatDownload}
-          currentFormat="jpeg"
-          imageData={`data:image/jpeg;base64,${processedImage}`}
+          currentFormat={getFormatFromMimetype(uploadedImage.mimetype) as ImageFormat}
+          imageData={`data:${uploadedImage.mimetype};base64,${processedImage}`}
           filename={uploadedImage.filename}
         />
       )}
 
       {/* Format Dialog for Batch Mode */}
-      {selectedDownloadId && batchItems.find(i => i.id === selectedDownloadId) && (
-        <FormatDownloadDialog
-          isOpen={showFormatDialog && !!selectedDownloadId}
-          onClose={() => {
-            setShowFormatDialog(false);
-            setSelectedDownloadId(null);
-          }}
-          onDownload={handleBatchFormatDownload}
-          currentFormat="jpeg"
-          imageData={batchItems.find(i => i.id === selectedDownloadId)?.processedData || ''}
-          filename={batchItems.find(i => i.id === selectedDownloadId)?.filename || 'image'}
-        />
-      )}
+      {selectedDownloadId && batchItems.find(i => i.id === selectedDownloadId) && (() => {
+        const itemIndex = batchItems.findIndex(i => i.id === selectedDownloadId);
+        const originalFile = itemIndex !== -1 ? uploadedFiles[itemIndex] : null;
+        const originalFormat = originalFile ? getFormatFromMimetype(originalFile.type) : 'jpeg';
+        const item = batchItems.find(i => i.id === selectedDownloadId);
+
+        return (
+          <FormatDownloadDialog
+            isOpen={showFormatDialog && !!selectedDownloadId}
+            onClose={() => {
+              setShowFormatDialog(false);
+              setSelectedDownloadId(null);
+            }}
+            onDownload={handleBatchFormatDownload}
+            currentFormat={originalFormat as ImageFormat}
+            imageData={item?.processedData || ''}
+            filename={item?.filename || 'image'}
+          />
+        );
+      })()}
 
       <motion.footer
         initial={{ opacity: 0 }}

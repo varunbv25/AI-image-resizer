@@ -20,6 +20,18 @@ import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
 import { upload } from '@vercel/blob/client';
 
+// Helper function to extract format from mimetype
+const getFormatFromMimetype = (mimetype: string): string => {
+  const formatMap: Record<string, string> = {
+    'image/jpeg': 'jpeg',
+    'image/jpg': 'jpeg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return formatMap[mimetype.toLowerCase()] || 'jpeg';
+};
+
 interface ImageCompressionProps {
   onBack: () => void;
   onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
@@ -662,8 +674,11 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       // Extract base64 data from data URL
       const base64Data = compressedImage.imageData.split(',')[1];
 
-      // Check if format is JPEG (current format from compression)
-      if (format === 'jpeg') {
+      // Get original format from uploaded image
+      const currentFormat = getFormatFromMimetype(uploadedImage.mimetype);
+
+      // Check if format matches current format
+      if (format === currentFormat) {
         // Direct download if same format
         const link = document.createElement('a');
         link.href = compressedImage.imageData;
@@ -761,8 +776,13 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
       // Extract base64 data from data URL
       const base64Data = item.processedData.split(',')[1];
 
-      // Check if format is JPEG (current format from compression)
-      if (format === 'jpeg') {
+      // Get original format from uploaded file
+      const itemIndex = batchItems.findIndex(i => i.id === selectedDownloadId);
+      const originalFile = itemIndex !== -1 ? uploadedFiles[itemIndex] : null;
+      const currentFormat = originalFile ? getFormatFromMimetype(originalFile.type) : 'jpeg';
+
+      // Check if format matches current format
+      if (format === currentFormat) {
         // Direct download if same format
         const link = document.createElement('a');
         link.href = item.processedData;
@@ -1870,26 +1890,33 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
           isOpen={showFormatDialog && !selectedDownloadId}
           onClose={() => setShowFormatDialog(false)}
           onDownload={handleFormatDownload}
-          currentFormat="jpeg"
+          currentFormat={getFormatFromMimetype(uploadedImage.mimetype) as ImageFormat}
           imageData={compressedImage.imageData}
           filename={uploadedImage.filename}
         />
       )}
 
       {/* Format Dialog for Batch Mode */}
-      {selectedDownloadId && batchItems.find(i => i.id === selectedDownloadId) && (
-        <FormatDownloadDialog
-          isOpen={showFormatDialog && !!selectedDownloadId}
-          onClose={() => {
-            setShowFormatDialog(false);
-            setSelectedDownloadId(null);
-          }}
-          onDownload={handleBatchFormatDownload}
-          currentFormat="jpeg"
-          imageData={batchItems.find(i => i.id === selectedDownloadId)?.processedData || ''}
-          filename={batchItems.find(i => i.id === selectedDownloadId)?.filename || 'image'}
-        />
-      )}
+      {selectedDownloadId && batchItems.find(i => i.id === selectedDownloadId) && (() => {
+        const itemIndex = batchItems.findIndex(i => i.id === selectedDownloadId);
+        const originalFile = itemIndex !== -1 ? uploadedFiles[itemIndex] : null;
+        const originalFormat = originalFile ? getFormatFromMimetype(originalFile.type) : 'jpeg';
+        const item = batchItems.find(i => i.id === selectedDownloadId);
+
+        return (
+          <FormatDownloadDialog
+            isOpen={showFormatDialog && !!selectedDownloadId}
+            onClose={() => {
+              setShowFormatDialog(false);
+              setSelectedDownloadId(null);
+            }}
+            onDownload={handleBatchFormatDownload}
+            currentFormat={originalFormat as ImageFormat}
+            imageData={item?.processedData || ''}
+            filename={item?.filename || 'image'}
+          />
+        );
+      })()}
 
       <motion.footer
         initial={{ opacity: 0 }}

@@ -19,6 +19,28 @@ import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
 import { upload } from '@vercel/blob/client';
 
+// Helper function to extract format from mimetype
+const getFormatFromMimetype = (mimetype: string): string => {
+  const formatMap: Record<string, string> = {
+    'image/jpeg': 'jpeg',
+    'image/jpg': 'jpeg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return formatMap[mimetype.toLowerCase()] || 'jpeg';
+};
+
+// Helper function to get canvas output format from file format
+const getCanvasMimeType = (format: string): string => {
+  const mimeMap: Record<string, string> = {
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'webp': 'image/webp',
+  };
+  return mimeMap[format] || 'image/jpeg';
+};
+
 interface ManualCroppingProps {
   onBack: () => void;
   onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
@@ -52,6 +74,7 @@ interface BatchCropItem {
   croppedData?: string;
   croppedSize?: number;
   error?: string;
+  mimetype: string; // Add mimetype to track original format
 }
 
 export function ManualCropping({ onEditAgain, preUploadedFiles }: ManualCroppingProps) {
@@ -155,6 +178,7 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
         originalDimensions: dimensions,
         targetDimensions: { width: 1080, height: 1920 },
         status: 'pending' as const,
+        mimetype: file.type, // Store original mimetype
       };
     });
 
@@ -310,7 +334,10 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
         item.targetDimensions.height
       );
 
-      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      // Use original format for output
+      const format = getFormatFromMimetype(item.mimetype);
+      const canvasMimeType = getCanvasMimeType(format);
+      const croppedDataUrl = canvas.toDataURL(canvasMimeType, 0.9);
       const croppedSize = Math.round((croppedDataUrl.length * 3) / 4);
 
       setBatchItems(prev => prev.map(i =>
@@ -1003,13 +1030,18 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
             outputHeight
           );
 
+          // Use original format for output
+          const format = getFormatFromMimetype(uploadedImage.mimetype);
+          const canvasMimeType = getCanvasMimeType(format);
+
           canvas.toBlob(async (blob) => {
             if (blob) {
               try {
                 const formData = new FormData();
-                formData.append('image', blob, 'cropped-image.jpg');
+                const extension = format === 'jpeg' ? 'jpg' : format;
+                formData.append('image', blob, `cropped-image.${extension}`);
                 formData.append('quality', '85');
-                formData.append('format', 'jpg');
+                formData.append('format', format);
 
                 const response = await fetch('/api/compress', {
                   method: 'POST',
@@ -1051,7 +1083,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
               }
             }
             setIsProcessing(false);
-          }, 'image/jpeg', 0.9);
+          }, canvasMimeType, 0.9);
         };
 
         img.onerror = (error) => {
@@ -1323,11 +1355,15 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
 
     setIsConverting(true);
     try {
-      // Check if format is JPEG (current format)
-      if (format === 'jpeg') {
+      // Get current format from uploaded image
+      const currentFormat = getFormatFromMimetype(uploadedImage.mimetype);
+
+      // Check if format matches current format
+      if (format === currentFormat) {
         // Direct download if same format
         const link = document.createElement('a');
-        link.href = `data:image/jpeg;base64,${croppedImageData}`;
+        const mimeType = getCanvasMimeType(format);
+        link.href = `data:${mimeType};base64,${croppedImageData}`;
         link.download = `cropped-${uploadedImage.filename}.${format}`;
         document.body.appendChild(link);
         link.click();
@@ -1807,8 +1843,8 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
           isOpen={showFormatDialog}
           onClose={() => setShowFormatDialog(false)}
           onDownload={handleFormatDownload}
-          currentFormat="jpeg"
-          imageData={`data:image/jpeg;base64,${croppedImageData}`}
+          currentFormat={getFormatFromMimetype(uploadedImage.mimetype) as ImageFormat}
+          imageData={`data:${uploadedImage.mimetype};base64,${croppedImageData}`}
           filename={uploadedImage.filename}
         />
       )}

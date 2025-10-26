@@ -19,6 +19,18 @@ import { FormatDownloadDialog, ImageFormat } from '@/components/FormatDownloadDi
 import { UnsupportedFormatError } from '@/components/UnsupportedFormatError';
 import { CancelDialog } from '@/components/CancelDialog';
 
+// Helper function to extract format from mimetype
+const getFormatFromMimetype = (mimetype: string): string => {
+  const formatMap: Record<string, string> = {
+    'image/jpeg': 'jpeg',
+    'image/jpg': 'jpeg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+  };
+  return formatMap[mimetype.toLowerCase()] || 'jpeg';
+};
+
 interface ImageEnhancementProps {
   onBack: () => void;
   onEditAgain?: (imageData: string, metadata: {filename: string, mimetype: string}) => void;
@@ -175,13 +187,14 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
 
     try {
       const base64 = await fileToBase64(file);
+      const originalFormat = getFormatFromMimetype(file.type);
 
       const response = await fetch('/api/enhance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageData: base64,
-          format: 'jpeg',
+          format: originalFormat,
           method: settings.method === 'ai' ? 'ai' : 'sharp',
           sharpness: settings.sharpness,
         }),
@@ -358,7 +371,14 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         });
 
         ctx.putImageData(enhancedImageData, 0, 0);
-        const enhancedBase64 = canvas.toDataURL('image/jpeg', 0.95);
+
+        // Use original format for output
+        const originalFormat = getFormatFromMimetype(uploadedImage.mimetype);
+        const mimeType = originalFormat === 'jpeg' ? 'image/jpeg' :
+                         originalFormat === 'png' ? 'image/png' :
+                         originalFormat === 'webp' ? 'image/webp' : 'image/jpeg';
+
+        const enhancedBase64 = canvas.toDataURL(mimeType, 0.95);
         const base64Data = enhancedBase64.split(',')[1];
 
         setEnhancedImage({
@@ -366,7 +386,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
           metadata: {
             width: img.width,
             height: img.height,
-            format: 'jpeg',
+            format: originalFormat,
             size: base64Data.length,
           },
         });
@@ -381,6 +401,9 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         return;
       }
 
+      // Get original format
+      const originalFormat = getFormatFromMimetype(uploadedImage.mimetype);
+
       const response = await fetch('/api/enhance', {
         method: 'POST',
         headers: {
@@ -388,7 +411,7 @@ export function ImageEnhancement({ onBack, onEditAgain, preUploadedFiles }: Imag
         },
         body: JSON.stringify({
           imageData: uploadedImage.imageData,
-          format: 'jpeg',
+          format: originalFormat,
           method: enhancementMethod === 'ai' ? 'ai' : 'sharp',
           sharpness: sharpness,
         }),
