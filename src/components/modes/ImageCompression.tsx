@@ -561,7 +561,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
     // Clear previous compressed image to allow retry
     setCompressedImage(null);
-    setIsCompressing(false);  
+    setIsCompressing(true);
     setCompressionError('');
 
     try {
@@ -1617,7 +1617,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 size="lg"
               >
-                {compressedImage ? 'Compression complete' : 'Apply Compression'}
+                {compressedImage ? 'Compression Complete' : 'Apply Compression'}
               </Button>
             )}
 
