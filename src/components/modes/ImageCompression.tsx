@@ -1614,7 +1614,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
             ) : (
               <Button
                 onClick={handleCompress}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                className="w-full bg-orange-500 hover:bg-orange-500 text-white"
                 size="lg"
               >
                 {compressedImage ? 'Compression Complete' : 'Apply Compression'}
@@ -1632,7 +1632,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                 >
                   <Button
                     onClick={handleDownload}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+                    className="w-full bg-blue-500 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
                     size="lg"
                   >
                     <Download className="h-5 w-5" />
