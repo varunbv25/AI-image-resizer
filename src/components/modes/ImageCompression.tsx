@@ -561,7 +561,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
     // Clear previous compressed image to allow retry
     setCompressedImage(null);
-    setIsCompressing(true);
+    setIsCompressing(false);  
     setCompressionError('');
 
     try {
@@ -575,7 +575,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
 
       if (usesBlobWorkflow) {
         // BLOB WORKFLOW for large files
-        console.log('🚀 Using blob workflow with server-side sharp.js');
+        console.log('Using blob workflow with server-side sharp.js');
 
         let blobUrl: string;
 
@@ -1617,7 +1617,7 @@ export function ImageCompression({ onEditAgain, preUploadedFiles }: ImageCompres
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 size="lg"
               >
-                {compressedImage ? 'Retry Compression' : 'Apply Compression'}
+                {compressedImage ? 'Compression complete' : 'Apply Compression'}
               </Button>
             )}
 
