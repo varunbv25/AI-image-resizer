@@ -5,16 +5,20 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Scissors, Bot, ArrowLeft, FileArchive, Sparkles, X, Wand2, RotateCw } from 'lucide-react';
+import { Scissors, Bot, ArrowLeft, FileArchive, Sparkles, X, Wand2, RotateCw, Video, Crop } from 'lucide-react';
 import { AIImageResizing } from '@/components/modes/AIImageResizing';
 import { ManualCropping } from '@/components/modes/ManualCropping';
 import { ImageCompression } from '@/components/modes/ImageCompression';
 import { ImageEnhancement } from '@/components/modes/ImageEnhancement';
 import { RotateFlip } from '@/components/modes/RotateFlip';
+import { VideoCompression } from '@/components/modes/VideoCompression';
+import { VideoCropping } from '@/components/modes/VideoCropping';
+import { VideoTrimming } from '@/components/modes/VideoTrimming';
 import { useDropzone } from 'react-dropzone';
-import { FILE_SIZE_LIMITS, validateImageFiles } from '@/lib/fileValidation';
+import { FILE_SIZE_LIMITS, validateImageFiles, validateVideoFiles, VIDEO_FILE_SIZE_LIMITS } from '@/lib/fileValidation';
 
-type Mode = 'ai-crop' | 'manual-crop' | 'compression' | 'enhancement' | 'rotate-flip' | null;
+type Mode = 'ai-crop' | 'manual-crop' | 'compression' | 'enhancement' | 'rotate-flip' | 'video-compression' | 'video-cropping' | 'video-trimming' | null;
+type FileType = 'image' | 'video' | 'mixed';
 type Step = 'upload' | 'mode-selection' | 'processing';
 
 const modeConfig = {
@@ -52,6 +56,27 @@ const modeConfig = {
     icon: RotateCw,
     color: 'teal',
     features: ['Quick 90°/180°/270° rotations', 'Horizontal & vertical flips', 'Custom angle rotation', 'Batch processing support']
+  },
+  'video-compression': {
+    title: 'Video Compression',
+    description: 'Reduce video file size with quality or size-based compression',
+    icon: Video,
+    color: 'purple',
+    features: ['Target file size control', 'MP4, MOV & WebM support', 'Client-side processing']
+  },
+  'video-cropping': {
+    title: 'Video Cropping',
+    description: 'Crop videos with preset or manual dimensions',
+    icon: Crop,
+    color: 'blue',
+    features: ['Preset aspect ratios', 'Manual crop controls', 'Drag to reposition', 'Real-time preview']
+  },
+  'video-trimming': {
+    title: 'Video Trimming',
+    description: 'Trim videos with slider or manual time controls',
+    icon: Scissors,
+    color: 'gray',
+    features: ['Slider-based trimming', 'Manual time input', 'Real-time preview', 'Precise frame control']
   }
 };
 
@@ -64,6 +89,9 @@ function HomeContent() {
   const [selectedMode, setSelectedMode] = useState<Mode>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [fileType, setFileType] = useState<FileType>('image');
+  const [videoThumbnails, setVideoThumbnails] = useState<Map<number, string>>(new Map());
+  const [playingVideo, setPlayingVideo] = useState<number | null>(null);
 
   // Sync state with URL on mount and when URL changes
   useEffect(() => {
@@ -82,13 +110,100 @@ function HomeContent() {
     }
   }, [searchParams, uploadedFiles.length]);
 
+  // Generate video thumbnails
+  useEffect(() => {
+    if (fileType === 'video' && uploadedFiles.length > 0) {
+      const generateThumbnails = async () => {
+        const newThumbnails = new Map<number, string>();
+
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const file = uploadedFiles[i];
+          if (file.type.startsWith('video/')) {
+            try {
+              const thumbnail = await generateVideoThumbnail(file);
+              newThumbnails.set(i, thumbnail);
+            } catch (error) {
+              console.error('Error generating thumbnail:', error);
+            }
+          }
+        }
+
+        setVideoThumbnails(newThumbnails);
+      };
+
+      generateThumbnails();
+    }
+  }, [uploadedFiles, fileType]);
+
+  // Helper function to generate video thumbnail
+  const generateVideoThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+
+      video.onloadeddata = () => {
+        // Seek to 25% of video duration for a representative frame
+        video.currentTime = video.duration * 0.25;
+      };
+
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const thumbnailUrl = canvas.toDataURL('image/jpeg', 0.8);
+          URL.revokeObjectURL(video.src);
+          resolve(thumbnailUrl);
+        } else {
+          reject(new Error('Failed to get canvas context'));
+        }
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(video.src);
+        reject(new Error('Failed to load video'));
+      };
+
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       setIsUploading(true);
       setUploadProgress(0);
 
-      // Validate all files against the most permissive limit (10MB)
-      const validation = validateImageFiles(acceptedFiles, 10 * 1024 * 1024);
+      // Determine file type
+      const hasImages = acceptedFiles.some(f => f.type.startsWith('image/'));
+      const hasVideos = acceptedFiles.some(f => f.type.startsWith('video/'));
+
+      let currentFileType: FileType = 'image';
+      if (hasImages && hasVideos) {
+        currentFileType = 'mixed';
+      } else if (hasVideos) {
+        currentFileType = 'video';
+      }
+
+      // Cannot mix images and videos
+      if (currentFileType === 'mixed') {
+        alert('Please upload either images or videos, not both at the same time.');
+        setIsUploading(false);
+        return;
+      }
+
+      setFileType(currentFileType);
+
+      // Validate files based on type
+      let validation: { isValid: boolean; invalidFiles: Array<{ file: File; error: string }>; validFiles: File[] };
+
+      if (currentFileType === 'video') {
+        validation = validateVideoFiles(acceptedFiles, 500 * 1024 * 1024);
+      } else {
+        validation = validateImageFiles(acceptedFiles, 50 * 1024 * 1024);
+      }
 
       if (!validation.isValid) {
         // Show validation errors
@@ -143,6 +258,11 @@ function HomeContent() {
       'image/png': ['.png'],
       'image/webp': ['.webp'],
       'image/svg+xml': ['.svg'],
+      'video/mp4': ['.mp4'],
+      'video/webm': ['.webm'],
+      'video/quicktime': ['.mov'],
+      'video/x-msvideo': ['.avi'],
+      'video/x-matroska': ['.mkv'],
     },
     multiple: true,
   });
@@ -166,23 +286,37 @@ function HomeContent() {
     }
   };
 
-  const handleEditAgain = (imageData: string, metadata: {filename: string, mimetype: string}) => {
-    // Convert processed image to File object for reuse
-    const base64Data = imageData.startsWith('data:') ? imageData.split(',')[1] : imageData;
-    const byteString = atob(base64Data);
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
-    }
-    const blob = new Blob([ab], { type: metadata.mimetype });
-    const file = new File([blob], metadata.filename, { type: metadata.mimetype });
+  const handleEditAgain = async (mediaData: string, metadata: {filename: string, mimetype: string}) => {
+    // For videos, mediaData is a blob URL, not base64
+    if (metadata.mimetype.startsWith('video/')) {
+      // Fetch blob URL and convert to File
+      const response = await fetch(mediaData);
+      const blob = await response.blob();
+      const file = new File([blob], metadata.filename, { type: metadata.mimetype });
 
-    // Set the converted file as uploaded file
-    setUploadedFiles([file]);
-    setCurrentStep('mode-selection');
-    setSelectedMode(null);
-    router.push('/?step=mode-selection');
+      // Set the converted file as uploaded file
+      setUploadedFiles([file]);
+      setCurrentStep('mode-selection');
+      setSelectedMode(null);
+      router.push('/?step=mode-selection');
+    } else {
+      // Convert processed image to File object for reuse (original logic)
+      const base64Data = mediaData.startsWith('data:') ? mediaData.split(',')[1] : mediaData;
+      const byteString = atob(base64Data);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: metadata.mimetype });
+      const file = new File([blob], metadata.filename, { type: metadata.mimetype });
+
+      // Set the converted file as uploaded file
+      setUploadedFiles([file]);
+      setCurrentStep('mode-selection');
+      setSelectedMode(null);
+      router.push('/?step=mode-selection');
+    }
   };
 
   const handleReset = () => {
@@ -282,7 +416,7 @@ function HomeContent() {
             Imagify
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Transform your images with resizing and enhancement powered by AI
+            Transform your images and videos with AI-powered processing
           </p>
         </motion.header>
 
@@ -320,7 +454,7 @@ function HomeContent() {
                       Uploading...
                     </h3>
                     <p className="text-sm text-gray-500">
-                      Supports JPEG, PNG, WebP and SVG • Multiple files supported
+                      Images: JPEG, PNG, WebP, SVG • Videos: MP4, MOV, WebM
                     </p>
 
                     <div className="space-y-2 mt-4">
@@ -360,13 +494,13 @@ function HomeContent() {
 
                   <div className="space-y-2 text-center">
                     <h3 className="text-xl font-semibold text-gray-800">
-                      {isDragActive ? 'Drop your images here' : 'Upload Your Images'}
+                      {isDragActive ? 'Drop your files here' : 'Upload Image or Video'}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      Drag and drop images or click to browse
+                      Drag and drop or click to browse
                     </p>
                     <p className="text-xs text-gray-400">
-                      Supports JPEG, PNG, WebP and SVG • Multiple files supported
+                      Images: JPEG, PNG, WebP, SVG • Videos: MP4, WebM, MOV, AVI, MKV
                     </p>
                   </div>
 
@@ -392,10 +526,18 @@ function HomeContent() {
     const batchCapableModes: Mode[] = ['compression', 'enhancement', 'rotate-flip'];
     const isBatchUpload = uploadedFiles.length > 1;
 
-    // Filter modes based on batch capability
+    // Define mode types
+    const imageModes: Mode[] = ['ai-crop', 'manual-crop', 'compression', 'enhancement', 'rotate-flip'];
+    const videoModes: Mode[] = ['video-compression', 'video-cropping', 'video-trimming'];
+
+    // Filter modes based on file type and batch capability
+    const modesPool = fileType === 'video' ? videoModes : imageModes;
+
     const availableModes = isBatchUpload
-      ? Object.entries(modeConfig).filter(([key]) => batchCapableModes.includes(key as Mode))
-      : Object.entries(modeConfig);
+      ? Object.entries(modeConfig).filter(([key]) =>
+          modesPool.includes(key as Mode) && batchCapableModes.includes(key as Mode)
+        )
+      : Object.entries(modeConfig).filter(([key]) => modesPool.includes(key as Mode));
 
     // Check file size compatibility for each mode
     const getModeCompatibility = (modeKey: Mode) => {
@@ -417,8 +559,17 @@ function HomeContent() {
         case 'rotate-flip':
           maxSize = FILE_SIZE_LIMITS.ROTATE_FLIP;
           break;
+        case 'video-compression':
+          maxSize = VIDEO_FILE_SIZE_LIMITS.VIDEO_COMPRESSION;
+          break;
+        case 'video-cropping':
+          maxSize = VIDEO_FILE_SIZE_LIMITS.VIDEO_CROPPING;
+          break;
+        case 'video-trimming':
+          maxSize = VIDEO_FILE_SIZE_LIMITS.VIDEO_TRIMMING;
+          break;
         default:
-          maxSize = FILE_SIZE_LIMITS.DEFAULT;
+          maxSize = fileType === 'video' ? VIDEO_FILE_SIZE_LIMITS.DEFAULT : FILE_SIZE_LIMITS.DEFAULT;
       }
 
       const oversizedFiles = uploadedFiles.filter(file => file.size > maxSize);
@@ -470,7 +621,7 @@ function HomeContent() {
             Choose Your Operation
           </h2>
           <p className="text-gray-600 text-sm">
-            {uploadedFiles.length} image{uploadedFiles.length > 1 ? 's' : ''} uploaded • {isBatchUpload ? 'Batch processing modes' : 'Select what you want to do'}
+            {uploadedFiles.length} {fileType === 'video' ? 'video' : 'image'}{uploadedFiles.length > 1 ? 's' : ''} uploaded • {isBatchUpload ? 'Batch processing modes' : 'Select what you want to do'}
           </p>
           {isBatchUpload && (
             <motion.p
@@ -483,39 +634,81 @@ function HomeContent() {
           )}
         </motion.div>
 
-        {/* Uploaded Images Preview */}
+        {/* Uploaded Files Preview */}
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           className="max-w-4xl mx-auto mb-6"
         >
           <div className="flex flex-wrap gap-4 justify-center">
-            {uploadedFiles.slice(0, 5).map((file, index) => (
-              <motion.div
-                key={index}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className="relative group"
-              >
-                <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-gray-200 bg-white">
-                  {
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt={file.name}
-                    className="w-full h-full object-cover"
-                  />
-                  }
-                </div>
-                <button
-                  onClick={() => removeFile(index)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            {uploadedFiles.slice(0, 5).map((file, index) => {
+              const isVideo = file.type.startsWith('video/');
+              const thumbnail = videoThumbnails.get(index);
+              const isPlaying = playingVideo === index;
+
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="relative group"
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.div>
-            ))}
+                  <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-gray-200 bg-white">
+                    {isVideo ? (
+                      isPlaying ? (
+                        <video
+                          src={URL.createObjectURL(file)}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => setPlayingVideo(null)}
+                        />
+                      ) : (
+                        <div
+                          className="relative w-full h-full cursor-pointer"
+                          onClick={() => setPlayingVideo(index)}
+                        >
+                          {thumbnail ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={thumbnail}
+                              alt={file.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                              <span className="text-gray-400 text-xs">Loading...</span>
+                            </div>
+                          )}
+                          {/* Play icon overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
+                            <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center">
+                              <div className="w-0 h-0 border-l-[10px] border-l-gray-800 border-y-[6px] border-y-transparent ml-1" />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              );
+            })}
             {uploadedFiles.length > 5 && (
               <div className="w-20 h-20 rounded-lg bg-gray-200 flex items-center justify-center">
                 <span className="text-gray-600 text-sm font-semibold">+{uploadedFiles.length - 5}</span>
@@ -557,9 +750,21 @@ function HomeContent() {
                       <motion.div
                         whileHover={isCompatible ? { rotate: 360 } : undefined}
                         transition={{ duration: 0.5 }}
-                        className={`w-12 h-12 mx-auto mb-3 bg-${config.color}-100 rounded-full flex items-center justify-center`}
+                        className={`w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center ${
+                          key === 'video-trimming'
+                            ? 'bg-gray-200'
+                            : key === 'video-compression'
+                            ? 'bg-purple-100'
+                            : `bg-${config.color}-100`
+                        }`}
                       >
-                        <Icon className={`w-6 h-6 text-${config.color}-600`} />
+                        <Icon className={`w-6 h-6 ${
+                          key === 'video-trimming'
+                            ? 'text-black'
+                            : key === 'video-compression'
+                            ? 'text-purple-600'
+                            : `text-${config.color}-600`
+                        }`} />
                       </motion.div>
                       <CardTitle className="text-base font-bold text-gray-900 leading-tight">
                         {config.title}
@@ -610,7 +815,10 @@ function HomeContent() {
       'manual-crop': ManualCropping,
       'compression': ImageCompression,
       'enhancement': ImageEnhancement,
-      'rotate-flip': RotateFlip
+      'rotate-flip': RotateFlip,
+      'video-compression': VideoCompression,
+      'video-cropping': VideoCropping,
+      'video-trimming': VideoTrimming,
     }[selectedMode];
 
     return (

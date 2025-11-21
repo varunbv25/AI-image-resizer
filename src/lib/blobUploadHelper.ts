@@ -156,10 +156,30 @@ export async function uploadToBlobSimple(
 }
 
 /**
+ * Check if running in local development environment
+ */
+function isLocalEnvironment(): boolean {
+  if (typeof window !== 'undefined') {
+    // Client-side check
+    const hostname = window.location.hostname;
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
+  }
+  // Server-side check
+  return process.env.NODE_ENV === 'development' || !process.env.VERCEL;
+}
+
+/**
  * Determine if a file should use blob upload based on its size
  * Files larger than 3MB should use blob upload to avoid function payload limits
+ * Blob upload is disabled when running locally
  */
 export function shouldUseBlobUpload(fileSize: number): boolean {
+  // Disable blob upload in local environment
+  if (isLocalEnvironment()) {
+    console.log('[BlobUpload] Local environment detected - blob upload disabled');
+    return false;
+  }
+
   const threshold = 3 * 1024 * 1024; // 3MB threshold
   return fileSize > threshold;
 }

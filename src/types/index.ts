@@ -67,3 +67,74 @@ export interface FormatConversionSettings {
   quality: number;
   originalFormat?: string;
 }
+
+// Video Types
+export type VideoProcessingMode = 'VIDEO_COMPRESSION' | 'VIDEO_CROPPING' | 'VIDEO_TRIMMING';
+
+export interface VideoDimensions {
+  width: number;
+  height: number;
+}
+
+export interface VideoMetadata {
+  duration: number; // in seconds
+  width: number;
+  height: number;
+  format: string;
+  size: number;
+  codec?: string;
+  bitrate?: number;
+  fps?: number;
+}
+
+export interface VideoProcessingStatus {
+  stage: 'idle' | 'uploading' | 'loading' | 'processing' | 'encoding' | 'completed' | 'error';
+  progress: number;
+  message: string;
+}
+
+export interface VideoCompressionSettings {
+  compressionType: 'filesize';
+  targetSize: number; // in MB for filesize mode
+  format: 'mp4' | 'webm' | 'mov';
+  resolution: '360p' | '480p' | '720p';
+}
+
+export interface VideoCropSettings {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  presetType?: 'manual' | 'preset';
+  aspectRatio?: string;
+}
+
+export interface VideoTrimSettings {
+  startTime: number; // in seconds
+  endTime: number; // in seconds
+  trimType: 'manual' | 'slider';
+}
+
+export interface UploadedVideoData {
+  filename: string;
+  metadata: VideoMetadata;
+  size: number;
+  mimetype: string;
+  videoData: string; // base64 or blob URL
+  blobUrl?: string;
+  thumbnailUrl?: string;
+}
+
+export interface ProcessedVideoData {
+  videoData: string;
+  metadata: VideoMetadata;
+  filename: string;
+  blobUrl?: string;
+}
+
+export interface VideoAPIResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  progress?: number;
+}
