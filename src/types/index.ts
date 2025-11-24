@@ -97,7 +97,7 @@ export interface VideoCompressionSettings {
   compressionType: 'filesize';
   targetSize: number; // in MB for filesize mode
   format: 'mp4' | 'webm' | 'mov';
-  resolution: '360p' | '480p' | '720p';
+  resolution: '240p' | '360p' | '480p' | '720p';
 }
 
 export interface VideoCropSettings {
@@ -137,4 +137,43 @@ export interface VideoAPIResponse<T = unknown> {
   data?: T;
   error?: string;
   progress?: number;
+}
+
+// Batch Video Processing Types
+export interface VideoBatchItem {
+  id: string;
+  filename: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  originalSize: number;
+  processedSize?: number;
+  error?: string;
+  processedData?: string; // blob URL for processed video
+  thumbnailUrl?: string;
+  blobUrl?: string;
+  settings?: VideoBatchItemSettings;
+  metadata?: VideoMetadata;
+}
+
+export type VideoBatchItemSettings = VideoBatchCompressionSettings | VideoBatchCropSettings | VideoBatchTrimSettings;
+
+export interface VideoBatchCompressionSettings {
+  compressionType?: 'filesize';
+  targetSize: number;
+  format: 'mp4' | 'webm' | 'mov';
+  resolution: '240p' | '360p' | '480p' | '720p';
+}
+
+export interface VideoBatchCropSettings {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  presetType?: 'manual' | 'preset';
+  aspectRatio?: string;
+}
+
+export interface VideoBatchTrimSettings {
+  startTime: number;
+  endTime: number;
+  trimType?: 'manual' | 'slider';
 }

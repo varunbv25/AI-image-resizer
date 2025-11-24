@@ -11,14 +11,37 @@ import { getVideoProcessor } from '@/lib/videoProcessor';
 import { Download, Check, Clock, AlertCircle, ArrowLeft, Scissors, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { VideoTrimSettings, VideoProcessingStatus } from '@/types';
+import { VideoTrimmingBatch } from './VideoTrimmingBatch';
 
 interface VideoTrimmingProps {
   onBack: () => void;
   onEditAgain?: (videoData: string, metadata: { filename: string, mimetype: string }) => void;
   preUploadedFiles?: File[];
+  onSwitchToBatch?: (files: File[]) => void;
 }
 
 export function VideoTrimming({ onBack, onEditAgain, preUploadedFiles }: VideoTrimmingProps) {
+  const [batchFiles, setBatchFiles] = useState<File[] | undefined>(preUploadedFiles);
+
+  // Check if we should use batch mode
+  const isBatchMode = batchFiles && batchFiles.length > 1;
+
+  // If batch mode, render batch component
+  if (isBatchMode) {
+    return <VideoTrimmingBatch onBack={onBack} preUploadedFiles={batchFiles} />;
+  }
+
+  return (
+    <VideoTrimmingSingle
+      onBack={onBack}
+      onEditAgain={onEditAgain}
+      preUploadedFiles={batchFiles && batchFiles.length === 1 ? batchFiles : undefined}
+      onSwitchToBatch={setBatchFiles}
+    />
+  );
+}
+
+function VideoTrimmingSingle({ onBack, onEditAgain, preUploadedFiles, onSwitchToBatch }: VideoTrimmingProps) {
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -144,6 +167,12 @@ export function VideoTrimming({ onBack, onEditAgain, preUploadedFiles }: VideoTr
     uploadFile(file);
     setProcessedVideo(null);
     setProcessingError('');
+  };
+
+  const handleBatchVideoUpload = (files: File[]) => {
+    if (onSwitchToBatch) {
+      onSwitchToBatch(files);
+    }
   };
 
 
@@ -361,9 +390,10 @@ export function VideoTrimming({ onBack, onEditAgain, preUploadedFiles }: VideoTr
             >
               <VideoUploader
                 onVideoUpload={handleVideoUpload}
+                onBatchVideoUpload={handleBatchVideoUpload}
                 isUploading={isUploading}
                 uploadProgress={uploadProgress}
-                supportsBatch={false}
+                supportsBatch={true}
               />
             </motion.div>
           )}

@@ -104,7 +104,7 @@ export class VideoProcessor {
 
   /**
    * Compress video with file size targeting
-   * Always uses H.264 codec, converts to selected resolution (360p, 480p, or 720p) at 30fps
+   * Always uses H.264 codec, converts to selected resolution (240p, 360p, 480p, or 720p) at 30fps
    * Supports MP4, WebM, and MOV container formats
    */
   async compressVideo(
@@ -130,6 +130,7 @@ export class VideoProcessor {
 
       // Get resolution height
       const resolutionMap = {
+        '240p': 240,
         '360p': 360,
         '480p': 480,
         '720p': 720
@@ -150,9 +151,10 @@ export class VideoProcessor {
 
       // Set minimum bitrate based on resolution
       const minBitrateMap = {
-        '360p': 400,   // 400 kbps minimum for 360p
-        '480p': 700,   // 700 kbps minimum for 480p
-        '720p': 1500   // 1500 kbps minimum for 720p
+        '240p': 250,   // 250 kbps minimum for 240p (low quality)
+        '360p': 400,   // 400 kbps minimum for 360p (optimal)
+        '480p': 700,   // 700 kbps minimum for 480p (better quality)
+        '720p': 1500   // 1500 kbps minimum for 720p (best quality)
       };
       const minBitrate = minBitrateMap[settings.resolution];
       videoBitrateKB = Math.max(videoBitrateKB, minBitrate);

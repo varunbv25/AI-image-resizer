@@ -11,16 +11,39 @@ import { getVideoProcessor } from '@/lib/videoProcessor';
 import { Download, Info, Check, Clock, AlertCircle, ArrowLeft, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { VideoCompressionSettings, VideoProcessingStatus } from '@/types';
+import { VideoCompressionBatch } from './VideoCompressionBatch';
 
 interface VideoCompressionProps {
   onBack: () => void;
   onEditAgain?: (videoData: string, metadata: { filename: string, mimetype: string }) => void;
   preUploadedFiles?: File[];
+  onSwitchToBatch?: (files: File[]) => void;
 }
 
 export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: VideoCompressionProps) {
+  const [batchFiles, setBatchFiles] = useState<File[] | undefined>(preUploadedFiles);
+
+  // Check if we should use batch mode
+  const isBatchMode = batchFiles && batchFiles.length > 1;
+
+  // If batch mode, render batch component
+  if (isBatchMode) {
+    return <VideoCompressionBatch onBack={onBack} preUploadedFiles={batchFiles} />;
+  }
+
+  return (
+    <VideoCompressionSingle
+      onBack={onBack}
+      onEditAgain={onEditAgain}
+      preUploadedFiles={batchFiles && batchFiles.length === 1 ? batchFiles : undefined}
+      onSwitchToBatch={setBatchFiles}
+    />
+  );
+}
+
+function VideoCompressionSingle({ onBack, onEditAgain, preUploadedFiles, onSwitchToBatch }: VideoCompressionProps) {
   const [targetSizeMB, setTargetSizeMB] = useState<number>(10);
-  const [resolution, setResolution] = useState<'360p' | '480p' | '720p'>('360p');
+  const [resolution, setResolution] = useState<'240p' | '360p' | '480p' | '720p'>('360p');
   const [outputFormat, setOutputFormat] = useState<'mp4' | 'webm' | 'mov'>('mp4');
   const [processedVideo, setProcessedVideo] = useState<{
     videoData: string;
@@ -56,10 +79,11 @@ export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: Vide
   }, []);
 
   // Calculate minimum acceptable size for phone viewing based on resolution
-  const calculateMinimumPhoneQualitySize = (duration: number, res: '360p' | '480p' | '720p'): number => {
+  const calculateMinimumPhoneQualitySize = (duration: number, res: '240p' | '360p' | '480p' | '720p'): number => {
     // Resolution-specific minimum bitrates for acceptable quality on phone screens
     const minVideoBitrateMap = {
-      '360p': 400,   // 400 kbps for 360p (5.5-6.5" phones)
+      '240p': 250,   // 250 kbps for 240p (low quality, may be blurry)
+      '360p': 400,   // 400 kbps for 360p (optimal for small file sizes)
       '480p': 700,   // 700 kbps for 480p (better quality)
       '720p': 1500   // 1500 kbps for 720p (HD quality)
     };
@@ -91,6 +115,13 @@ export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: Vide
     uploadFile(file);
     setProcessedVideo(null);
     setProcessingError('');
+  };
+
+  const handleBatchVideoUpload = (files: File[]) => {
+    // Switch to batch mode by notifying parent
+    if (onSwitchToBatch) {
+      onSwitchToBatch(files);
+    }
   };
 
   const handleCompress = async () => {
@@ -279,9 +310,10 @@ export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: Vide
             >
               <VideoUploader
                 onVideoUpload={handleVideoUpload}
+                onBatchVideoUpload={handleBatchVideoUpload}
                 isUploading={isUploading}
                 uploadProgress={uploadProgress}
-                supportsBatch={false}
+                supportsBatch={true}
               />
             </motion.div>
           )}
@@ -315,17 +347,40 @@ export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: Vide
                         value={[targetSizeMB]}
                         onValueChange={(value) => setTargetSizeMB(value[0])}
                         min={calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution)}
-                        max={Number((uploadedVideo.size / (1024 * 1024)).toFixed(3))-1}
+                        max={Number((uploadedVideo.size / (1024 * 1024)).toFixed(3))-0.01}
                         step={0.001}
                         className="py-4"
+                        disabled={calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution) >= Number((uploadedVideo.size / (1024 * 1024)).toFixed(3)) - 0.01}
                       />
                       <div className="space-y-1 mt-2">
                         <p className="text-xs text-gray-500">
-                          Minimum file size: {formatFileSize(calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution) * 1024 * 1024)} (min for {resolution})
+                          Minimum: {formatFileSize(calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution) * 1024 * 1024)} |
+                          Maximum: {formatFileSize(uploadedVideo.size - 10240)}
                         </p>
-                        <p className="text-xs text-green-600 font-medium">
-                          ✓ Minimum set to maintain good quality for {resolution} on phone screens
-                        </p>
+                        {(() => {
+                          const fileSizeMB = uploadedVideo.size / (1024 * 1024);
+                          const min240p = calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, '240p');
+                          const min360p = calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, '360p');
+                          const min480p = calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, '480p');
+                          const currentMin = calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution);
+
+                          if (currentMin >= fileSizeMB - 0.01) {
+                            // File is too small for current resolution
+                            if (resolution === '720p' && min480p < fileSizeMB - 0.01) {
+                              return <p className="text-xs text-red-600 font-medium">⚠️ Video file is too small for 720p compression. Try 480p or lower resolution.</p>;
+                            } else if (resolution === '480p' && min360p < fileSizeMB - 0.01) {
+                              return <p className="text-xs text-red-600 font-medium">⚠️ Video file is too small for 480p compression. Try 360p or 240p.</p>;
+                            } else if (resolution === '360p' && min240p < fileSizeMB - 0.01) {
+                              return <p className="text-xs text-red-600 font-medium">⚠️ Video file is too small for 360p compression. Try 240p.</p>;
+                            } else if (resolution === '240p') {
+                              return <p className="text-xs text-red-600 font-medium">⚠️ Video file is too small even for 240p compression. File is already highly compressed.</p>;
+                            } else {
+                              return <p className="text-xs text-red-600 font-medium">⚠️ Video file is too small for {resolution} compression. File is already highly compressed.</p>;
+                            }
+                          } else {
+                            return <p className="text-xs text-green-600 font-medium">✓ Minimum set to maintain good quality for {resolution} on phone screens</p>;
+                          }
+                        })()}
                       </div>
                     </div>
                   )}
@@ -335,7 +390,15 @@ export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: Vide
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Output Resolution (30 FPS)
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={resolution === '240p' ? 'default' : 'outline'}
+                        onClick={() => setResolution('240p')}
+                        className="w-full"
+                        size="sm"
+                      >
+                        240p
+                      </Button>
                       <Button
                         variant={resolution === '360p' ? 'default' : 'outline'}
                         onClick={() => setResolution('360p')}
@@ -362,9 +425,31 @@ export function VideoCompression({ onBack, onEditAgain, preUploadedFiles }: Vide
                       </Button>
                     </div>
                     {uploadedVideo && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Min size for {resolution}: {formatFileSize(calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution) * 1024 * 1024)}
-                      </p>
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs text-gray-500">
+                          Min size: {formatFileSize(calculateMinimumPhoneQualitySize(uploadedVideo.metadata.duration, resolution) * 1024 * 1024)}
+                        </p>
+                        {resolution === '240p' && (
+                          <p className="text-xs text-amber-600 font-medium">
+                            ⚠️ Low resolution, video may turn out to be blurry, small file size
+                          </p>
+                        )}
+                        {resolution === '360p' && (
+                          <p className="text-xs text-green-600 font-medium">
+                            ✓ Optimal resolution, best file size
+                          </p>
+                        )}
+                        {resolution === '480p' && (
+                          <p className="text-xs text-blue-600 font-medium">
+                            ℹ️ Better resolution, higher file size
+                          </p>
+                        )}
+                        {resolution === '720p' && (
+                          <p className="text-xs text-purple-600 font-medium">
+                            ⭐ Best resolution, highest file size
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
 

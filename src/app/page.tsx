@@ -522,8 +522,8 @@ function HomeContent() {
 
   // Render mode selection step
   const renderModeSelection = () => {
-    // Define batch-capable modes (only these support multiple images)
-    const batchCapableModes: Mode[] = ['compression', 'enhancement', 'rotate-flip'];
+    // Define batch-capable modes (only these support multiple images/videos)
+    const batchCapableModes: Mode[] = ['compression', 'enhancement', 'rotate-flip', 'video-compression', 'video-trimming'];
     const isBatchUpload = uploadedFiles.length > 1;
 
     // Define mode types
@@ -623,15 +623,6 @@ function HomeContent() {
           <p className="text-gray-600 text-sm">
             {uploadedFiles.length} {fileType === 'video' ? 'video' : 'image'}{uploadedFiles.length > 1 ? 's' : ''} uploaded • {isBatchUpload ? 'Batch processing modes' : 'Select what you want to do'}
           </p>
-          {isBatchUpload && (
-            <motion.p
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-blue-600 mt-1"
-            >
-              Generative Expand and Manual Cropping are only available for single images
-            </motion.p>
-          )}
         </motion.div>
 
         {/* Uploaded Files Preview */}
