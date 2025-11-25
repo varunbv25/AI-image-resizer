@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ImageUploader } from '@/components/ImageUploader';
 import { DimensionSelector } from '@/components/DimensionSelector';
+import { CropFrame } from '@/components/CropFrame';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { ImageDimensions } from '@/types';
 import { Download, Scissors, ZoomIn, Move, Keyboard, FileArchive, Info, Check, Clock, AlertCircle, X, Edit2, RotateCcw } from 'lucide-react';
@@ -47,7 +48,7 @@ interface ManualCroppingProps {
   preUploadedFiles?: File[];
 }
 
-interface CropFrame {
+interface CropFrameRect {
   x: number;
   y: number;
   width: number;
@@ -129,13 +130,8 @@ function ManualCroppingBatchContent({ initialFiles, onBack }: ManualCroppingBatc
   const [totalCompleted, setTotalCompleted] = useState(0);
 
   // Cropping state for selected image
-  const [cropFrame, setCropFrame] = useState<CropFrame>({ x: 100, y: 100, width: 300, height: 400 });
+  const [cropFrame, setCropFrame] = useState<CropFrameRect>({ x: 100, y: 100, width: 300, height: 400 });
   const [imageDisplay, setImageDisplay] = useState<ImageDisplay>({ x: 0, y: 0, width: 0, height: 0, scale: 1 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
-  const [initialCropFrame, setInitialCropFrame] = useState<CropFrame | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -684,7 +680,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     height: 1920,
   });
 
-  const [cropFrame, setCropFrame] = useState<CropFrame>({
+  const [cropFrame, setCropFrame] = useState<CropFrameRect>({
     x: 100,
     y: 100,
     width: 300,
@@ -699,14 +695,8 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     scale: 1,
   });
 
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
-  const [initialCropFrame, setInitialCropFrame] = useState<CropFrame | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [croppedImageUrl, setCroppedImageUrl] = useState<string | null>(null);
-  const [isImageHovered, setIsImageHovered] = useState(false);
   const [isDimensionSelected, setIsDimensionSelected] = useState(false);
   const [showFormatDialog, setShowFormatDialog] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
@@ -1095,187 +1085,9 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     }
   }, [uploadedImage, targetDimensions, cropFrame, imageDisplay, isDimensionSelected, originalFile]);
 
-  // Handle crop frame movement
-  const handleFrameMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - cropFrame.x,
-      y: e.clientY - cropFrame.y,
-    });
-  }, [cropFrame]);
-
-  // Handle crop frame resizing
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent, handle: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizing(true);
-    setResizeHandle(handle);
-    setInitialCropFrame({ ...cropFrame });
-    setDragStart({
-      x: e.clientX,
-      y: e.clientY,
-    });
-  }, [cropFrame]);
-
-  // Global mouse handlers for dragging and resizing
-  const handleGlobalMouseMove = useCallback((e: React.MouseEvent) => {
-    if (isDragging) {
-      const newX = e.clientX - dragStart.x;
-      const newY = e.clientY - dragStart.y;
-
-      // Constrain frame to image bounds (not container bounds)
-      const maxX = Math.min(600 - cropFrame.width, imageDisplay.x + imageDisplay.width - cropFrame.width);
-      const maxY = Math.min(400 - cropFrame.height, imageDisplay.y + imageDisplay.height - cropFrame.height);
-      const minX = Math.max(0, imageDisplay.x);
-      const minY = Math.max(0, imageDisplay.y);
-
-      setCropFrame(prev => ({
-        ...prev,
-        x: Math.max(minX, Math.min(maxX, newX)),
-        y: Math.max(minY, Math.min(maxY, newY)),
-      }));
-    } else if (isResizing && resizeHandle && initialCropFrame) {
-      const deltaX = e.clientX - dragStart.x;
-      const deltaY = e.clientY - dragStart.y;
-      const targetAspectRatio = isDimensionSelected ? targetDimensions.width / targetDimensions.height : 0;
-
-      const newFrame = { ...initialCropFrame };
-
-      // Handle corner and edge resizing
-      if (resizeHandle.includes('e') || resizeHandle.includes('w') || resizeHandle.includes('n') || resizeHandle.includes('s')) {
-        let newWidth = newFrame.width;
-        let newHeight = newFrame.height;
-
-        // Check if it's a corner handle (diagonal resize)
-        const isCorner = (resizeHandle.includes('n') || resizeHandle.includes('s')) &&
-                         (resizeHandle.includes('e') || resizeHandle.includes('w'));
-
-        if (isCorner) {
-          // Diagonal resize - adjust both width and height
-          if (resizeHandle.includes('e')) {
-            newWidth = initialCropFrame.width + deltaX;
-          } else if (resizeHandle.includes('w')) {
-            newWidth = initialCropFrame.width - deltaX;
-          }
-
-          if (resizeHandle.includes('s')) {
-            newHeight = initialCropFrame.height + deltaY;
-          } else if (resizeHandle.includes('n')) {
-            newHeight = initialCropFrame.height - deltaY;
-          }
-
-          // Maintain aspect ratio only if dimension is selected
-          if (isDimensionSelected && targetAspectRatio > 0) {
-            // Use the larger delta to determine which dimension to prioritize
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-              // Width change is larger, adjust height to match
-              newHeight = newWidth / targetAspectRatio;
-            } else {
-              // Height change is larger, adjust width to match
-              newWidth = newHeight * targetAspectRatio;
-            }
-          }
-        } else {
-          // Edge resize - only one dimension changes
-          if (resizeHandle.includes('e')) {
-            newWidth = initialCropFrame.width + deltaX;
-          } else if (resizeHandle.includes('w')) {
-            newWidth = initialCropFrame.width - deltaX;
-          } else if (resizeHandle.includes('s')) {
-            newHeight = initialCropFrame.height + deltaY;
-          } else if (resizeHandle.includes('n')) {
-            newHeight = initialCropFrame.height - deltaY;
-          }
-
-          // Maintain aspect ratio only if dimension is selected
-          if (isDimensionSelected && targetAspectRatio > 0) {
-            if (resizeHandle.includes('e') || resizeHandle.includes('w')) {
-              // Width-based resize
-              newHeight = newWidth / targetAspectRatio;
-            } else {
-              // Height-based resize
-              newWidth = newHeight * targetAspectRatio;
-            }
-          }
-        }
-
-        // Apply position changes for corners that move the origin
-        if (resizeHandle.includes('w')) {
-          newFrame.x = initialCropFrame.x + (initialCropFrame.width - newWidth);
-        }
-        if (resizeHandle.includes('n')) {
-          newFrame.y = initialCropFrame.y + (initialCropFrame.height - newHeight);
-        }
-
-        newFrame.width = newWidth;
-        newFrame.height = newHeight;
-      }
-
-      // Enforce minimum size
-      const minSize = 40;
-      if (newFrame.width < minSize || newFrame.height < minSize) {
-        if (isDimensionSelected && targetAspectRatio > 0) {
-          // Maintain aspect ratio
-          if (targetAspectRatio > 1) {
-            // Landscape - set minimum width
-            newFrame.width = minSize;
-            newFrame.height = minSize / targetAspectRatio;
-          } else {
-            // Portrait/Square - set minimum height
-            newFrame.height = minSize;
-            newFrame.width = minSize * targetAspectRatio;
-          }
-        } else {
-          // Free resize - just enforce minimum
-          if (newFrame.width < minSize) newFrame.width = minSize;
-          if (newFrame.height < minSize) newFrame.height = minSize;
-        }
-
-        // Adjust position if needed
-        if (resizeHandle.includes('w')) {
-          newFrame.x = initialCropFrame.x + initialCropFrame.width - newFrame.width;
-        }
-        if (resizeHandle.includes('n')) {
-          newFrame.y = initialCropFrame.y + initialCropFrame.height - newFrame.height;
-        }
-      }
-
-      // Constrain to image bounds
-      const imageRight = imageDisplay.x + imageDisplay.width;
-      const imageBottom = imageDisplay.y + imageDisplay.height;
-
-      // Adjust position to stay within bounds
-      newFrame.x = Math.max(imageDisplay.x, Math.min(imageRight - newFrame.width, newFrame.x));
-      newFrame.y = Math.max(imageDisplay.y, Math.min(imageBottom - newFrame.height, newFrame.y));
-
-      // Adjust size if frame extends beyond image bounds
-      newFrame.width = Math.min(imageRight - newFrame.x, newFrame.width);
-      newFrame.height = Math.min(imageBottom - newFrame.y, newFrame.height);
-
-      // Re-adjust to maintain aspect ratio if size was constrained (only if dimension selected)
-      if (isDimensionSelected && targetAspectRatio > 0) {
-        const constrainedAspectRatio = newFrame.width / newFrame.height;
-        if (Math.abs(constrainedAspectRatio - targetAspectRatio) > 0.01) {
-          if (constrainedAspectRatio > targetAspectRatio) {
-            // Width is too large, reduce it
-            newFrame.width = newFrame.height * targetAspectRatio;
-          } else {
-            // Height is too large, reduce it
-            newFrame.height = newFrame.width / targetAspectRatio;
-          }
-        }
-      }
-
-      setCropFrame(newFrame);
-    }
-  }, [isDragging, isResizing, dragStart, cropFrame, resizeHandle, initialCropFrame, targetDimensions, imageDisplay, isDimensionSelected]);
-
-  const handleGlobalMouseUp = useCallback(() => {
-    setIsDragging(false);
-    setIsResizing(false);
-    setResizeHandle(null);
-    setInitialCropFrame(null);
+  // Handle crop frame changes from CropFrame component
+  const handleCropFrameChange = useCallback((frame: { x: number; y: number; width: number; height: number }) => {
+    setCropFrame(frame);
   }, []);
 
   // Cleanup and keyboard shortcuts
@@ -1339,6 +1151,13 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
     setTargetDimensions(dimensions);
     setIsDimensionSelected(true);
     updateCropFrameForDimensions(dimensions, imageDisplay);
+  };
+
+  const handleManualModeChange = (isManual: boolean) => {
+    // When switching to manual mode, disable dimension selection (aspect ratio lock)
+    if (isManual) {
+      setIsDimensionSelected(false);
+    }
   };
 
   const handleDownload = () => {
@@ -1550,9 +1369,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                         </div>
                       ) : (
                         <div className="relative w-full h-full bg-slate-200 rounded-lg overflow-hidden"
-                             style={{ width: '600px', height: '400px' }}
-                             onMouseMove={handleGlobalMouseMove}
-                             onMouseUp={handleGlobalMouseUp}>
+                             style={{ width: '600px', height: '400px' }}>
 
                           {/* Main Image - Stationary */}
                           {uploadedImage?.imageData && (
@@ -1572,76 +1389,30 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                             />
                           )}
 
-                          {/* Semi-transparent overlay */}
-                          <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-
-                          {/* Crop Frame */}
-                          <div
-                            className="absolute border-2 border-white shadow-lg cursor-move bg-transparent"
-                            style={{
-                              left: cropFrame.x,
-                              top: cropFrame.y,
-                              width: cropFrame.width,
-                              height: cropFrame.height,
-                              boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)',
-                            }}
-                            onMouseDown={handleFrameMouseDown}
-                          >
-                            {/* Resize handles */}
-                            {/* Top-left */}
-                            <div
-                              className="absolute w-3 h-3 bg-white border border-gray-400 cursor-nw-resize -top-1 -left-1"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
+                          {/* Crop Frame Component */}
+                          {imageDisplay.width > 0 && (
+                            <CropFrame
+                              x={cropFrame.x}
+                              y={cropFrame.y}
+                              width={cropFrame.width}
+                              height={cropFrame.height}
+                              containerWidth={600}
+                              containerHeight={400}
+                              imageDisplay={imageDisplay}
+                              onFrameChange={handleCropFrameChange}
+                              aspectRatio={isDimensionSelected ? targetDimensions.width / targetDimensions.height : undefined}
+                              lockAspectRatio={isDimensionSelected}
+                              showDimensions={true}
+                              showAspectRatioHint={true}
+                              showPresetButtons={false}
+                              presetAspectRatios={[
+                                { label: '16:9', ratio: 16/9, width: 16, height: 9 },
+                                { label: '4:3', ratio: 4/3, width: 4, height: 3 },
+                                { label: '1:1', ratio: 1, width: 1, height: 1 },
+                                { label: '9:16', ratio: 9/16, width: 9, height: 16 },
+                              ]}
                             />
-                            {/* Top-right */}
-                            <div
-                              className="absolute w-3 h-3 bg-white border border-gray-400 cursor-ne-resize -top-1 -right-1"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
-                            />
-                            {/* Bottom-left */}
-                            <div
-                              className="absolute w-3 h-3 bg-white border border-gray-400 cursor-sw-resize -bottom-1 -left-1"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
-                            />
-                            {/* Bottom-right */}
-                            <div
-                              className="absolute w-3 h-3 bg-white border border-gray-400 cursor-se-resize -bottom-1 -right-1"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
-                            />
-
-                            {/* Edge handles */}
-                            {/* Top */}
-                            <div
-                              className="absolute w-6 h-2 bg-white border border-gray-400 cursor-n-resize -top-1 left-1/2 transform -translate-x-1/2"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
-                            />
-                            {/* Bottom */}
-                            <div
-                              className="absolute w-6 h-2 bg-white border border-gray-400 cursor-s-resize -bottom-1 left-1/2 transform -translate-x-1/2"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 's')}
-                            />
-                            {/* Left */}
-                            <div
-                              className="absolute w-2 h-6 bg-white border border-gray-400 cursor-w-resize -left-1 top-1/2 transform -translate-y-1/2"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
-                            />
-                            {/* Right */}
-                            <div
-                              className="absolute w-2 h-6 bg-white border border-gray-400 cursor-e-resize -right-1 top-1/2 transform -translate-y-1/2"
-                              onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
-                            />
-
-                            {/* Crop info overlay */}
-                            <div className="absolute -top-8 left-0 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                              {Math.round(cropFrame.width / imageDisplay.scale)} × {Math.round(cropFrame.height / imageDisplay.scale)}
-                              <span className="ml-2 opacity-75">
-                                ({isDimensionSelected
-                                  ? (targetDimensions.width / targetDimensions.height).toFixed(2)
-                                  : (cropFrame.width / cropFrame.height).toFixed(2)
-                                })
-                              </span>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1688,6 +1459,7 @@ function ManualCroppingContent({ setBatchFiles, preUploadedFile, onEditAgain }: 
                     originalDimensions={uploadedImage.originalDimensions}
                     targetDimensions={targetDimensions}
                     onDimensionsChange={handleDimensionsChange}
+                    onManualModeChange={handleManualModeChange}
                     showAIMessage={false}
                   />
                 </motion.div>

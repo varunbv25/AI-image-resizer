@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { VideoUploader } from '@/components/VideoUploader';
 import { VideoThumbnail } from '@/components/VideoThumbnail';
+import { CropFrame } from '@/components/CropFrame';
 import { useVideoUpload } from '@/hooks/useVideoUpload';
 import { getVideoProcessor } from '@/lib/videoProcessor';
 import { Download, Info, Check, Clock, AlertCircle, ArrowLeft, Crop, Edit2 } from 'lucide-react';
@@ -26,7 +27,6 @@ const PRESET_SIZES = [
 ];
 
 export function VideoCropping({ onBack, onEditAgain, preUploadedFiles }: VideoCroppingProps) {
-  const [cropMode, setCropMode] = useState<'preset' | 'manual'>('preset');
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [customWidth, setCustomWidth] = useState(1280);
   const [customHeight, setCustomHeight] = useState(720);
@@ -43,12 +43,12 @@ export function VideoCropping({ onBack, onEditAgain, preUploadedFiles }: VideoCr
     message: '',
   });
   const [processingError, setProcessingError] = useState<string>('');
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [videoDisplay, setVideoDisplay] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [lockAspectRatio, setLockAspectRatio] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const {
@@ -69,107 +69,69 @@ export function VideoCropping({ onBack, onEditAgain, preUploadedFiles }: VideoCr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Initialize crop rectangle when video is loaded
+  // Initialize video display and crop rectangle when video is loaded
   useEffect(() => {
-    if (uploadedVideo && cropMode === 'manual') {
-      const preset = PRESET_SIZES[selectedPreset];
+    if (uploadedVideo && videoLoaded) {
+      const containerWidth = 600;
+      const containerHeight = 400;
       const videoWidth = uploadedVideo.metadata.width;
       const videoHeight = uploadedVideo.metadata.height;
+      const videoAspect = videoWidth / videoHeight;
+      const containerAspect = containerWidth / containerHeight;
 
-      let cropWidth, cropHeight;
+      let displayWidth, displayHeight;
+      if (videoAspect > containerAspect) {
+        displayWidth = containerWidth;
+        displayHeight = containerWidth / videoAspect;
+      } else {
+        displayHeight = containerHeight;
+        displayWidth = containerHeight * videoAspect;
+      }
+
+      const newVideoDisplay = {
+        x: (containerWidth - displayWidth) / 2,
+        y: (containerHeight - displayHeight) / 2,
+        width: displayWidth,
+        height: displayHeight,
+      };
+      setVideoDisplay(newVideoDisplay);
+
+      // Initialize crop rectangle
+      const preset = PRESET_SIZES[selectedPreset];
+      let cropWidth: number, cropHeight: number;
 
       if (preset.ratio === 'custom') {
-        cropWidth = Math.min(customWidth, videoWidth);
-        cropHeight = Math.min(customHeight, videoHeight);
+        cropWidth = Math.min(customWidth, displayWidth * 0.8);
+        cropHeight = Math.min(customHeight, displayHeight * 0.8);
       } else {
-        cropWidth = Math.min(preset.width, videoWidth);
-        cropHeight = Math.min(preset.height, videoHeight);
+        const targetRatio = preset.width / preset.height;
+        if (targetRatio > 1) {
+          cropWidth = Math.min(displayWidth * 0.6, 400);
+          cropHeight = cropWidth / targetRatio;
+        } else {
+          cropHeight = Math.min(displayHeight * 0.6, 400);
+          cropWidth = cropHeight * targetRatio;
+        }
       }
 
       setCropRect({
-        x: Math.floor((videoWidth - cropWidth) / 2),
-        y: Math.floor((videoHeight - cropHeight) / 2),
+        x: newVideoDisplay.x + (displayWidth - cropWidth) / 2,
+        y: newVideoDisplay.y + (displayHeight - cropHeight) / 2,
         width: cropWidth,
         height: cropHeight,
       });
     }
-  }, [uploadedVideo, selectedPreset, customWidth, customHeight, cropMode]);
-
-  // Draw crop overlay on canvas
-  useEffect(() => {
-    if (!canvasRef.current || !videoRef.current || cropMode !== 'manual') return;
-
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas size
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    setCanvasSize({ width: video.videoWidth, height: video.videoHeight });
-
-    // Draw video frame
-    ctx.drawImage(video, 0, 0);
-
-    // Draw dark overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Clear crop area
-    ctx.clearRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-    ctx.drawImage(video, cropRect.x, cropRect.y, cropRect.width, cropRect.height, cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-
-    // Draw crop border
-    ctx.strokeStyle = '#a855f7';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-  }, [cropRect, cropMode]);
+  }, [uploadedVideo, selectedPreset, customWidth, customHeight, videoLoaded]);
 
   const handleVideoUpload = (file: File) => {
     uploadFile(file);
     setProcessedVideo(null);
     setProcessingError('');
+    setVideoLoaded(false);
   };
 
-  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasSize.width / rect.width;
-    const scaleY = canvasSize.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    // Check if click is inside crop rect
-    if (
-      x >= cropRect.x &&
-      x <= cropRect.x + cropRect.width &&
-      y >= cropRect.y &&
-      y <= cropRect.y + cropRect.height
-    ) {
-      setIsDragging(true);
-      setDragStart({ x: x - cropRect.x, y: y - cropRect.y });
-    }
-  };
-
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !canvasRef.current) return;
-
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = canvasSize.width / rect.width;
-    const scaleY = canvasSize.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    const newX = Math.max(0, Math.min(x - dragStart.x, canvasSize.width - cropRect.width));
-    const newY = Math.max(0, Math.min(y - dragStart.y, canvasSize.height - cropRect.height));
-
-    setCropRect(prev => ({ ...prev, x: newX, y: newY }));
-  };
-
-  const handleCanvasMouseUp = () => {
-    setIsDragging(false);
+  const handleCropFrameChange = (frame: { x: number; y: number; width: number; height: number }) => {
+    setCropRect(frame);
   };
 
   const handleCrop = async () => {
@@ -205,40 +167,21 @@ export function VideoCropping({ onBack, onEditAgain, preUploadedFiles }: VideoCr
       const blob = await response.blob();
       const file = new File([blob], uploadedVideo.filename, { type: uploadedVideo.mimetype });
 
-      // Determine crop settings
-      let cropSettings: VideoCropSettings;
+      // Determine crop settings - convert display coordinates to video coordinates
+      // Convert display coordinates to actual video coordinates
+      const scale = uploadedVideo.metadata.width / videoDisplay.width;
+      const videoX = (cropRect.x - videoDisplay.x) * scale;
+      const videoY = (cropRect.y - videoDisplay.y) * scale;
+      const videoWidth = cropRect.width * scale;
+      const videoHeight = cropRect.height * scale;
 
-      if (cropMode === 'preset') {
-        const preset = PRESET_SIZES[selectedPreset];
-        const videoWidth = uploadedVideo.metadata.width;
-        const videoHeight = uploadedVideo.metadata.height;
-
-        let width, height;
-        if (preset.ratio === 'custom') {
-          width = Math.min(customWidth, videoWidth);
-          height = Math.min(customHeight, videoHeight);
-        } else {
-          width = Math.min(preset.width, videoWidth);
-          height = Math.min(preset.height, videoHeight);
-        }
-
-        cropSettings = {
-          x: Math.floor((videoWidth - width) / 2),
-          y: Math.floor((videoHeight - height) / 2),
-          width,
-          height,
-          presetType: 'preset',
-          aspectRatio: preset.ratio,
-        };
-      } else {
-        cropSettings = {
-          x: Math.round(cropRect.x),
-          y: Math.round(cropRect.y),
-          width: Math.round(cropRect.width),
-          height: Math.round(cropRect.height),
-          presetType: 'manual',
-        };
-      }
+      const cropSettings: VideoCropSettings = {
+        x: Math.round(Math.max(0, videoX)),
+        y: Math.round(Math.max(0, videoY)),
+        width: Math.round(Math.min(videoWidth, uploadedVideo.metadata.width)),
+        height: Math.round(Math.min(videoHeight, uploadedVideo.metadata.height)),
+        presetType: 'manual',
+      };
 
       const result = await processor.cropVideo(file, cropSettings);
 
@@ -393,35 +336,26 @@ export function VideoCropping({ onBack, onEditAgain, preUploadedFiles }: VideoCr
                   <CardTitle className="text-lg">Crop Settings</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Crop Mode */}
+                  {/* Aspect Ratio Lock */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Crop Mode
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={lockAspectRatio}
+                        onChange={(e) => setLockAspectRatio(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded"
+                      />
+                      Lock Aspect Ratio
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant={cropMode === 'preset' ? 'default' : 'outline'}
-                        onClick={() => setCropMode('preset')}
-                        className="w-full"
-                        size="sm"
-                      >
-                        Preset
-                      </Button>
-                      <Button
-                        variant={cropMode === 'manual' ? 'default' : 'outline'}
-                        onClick={() => setCropMode('manual')}
-                        className="w-full"
-                        size="sm"
-                      >
-                        Manual
-                      </Button>
-                    </div>
+                    <p className="text-xs text-gray-500 mt-1 ml-6">
+                      Maintain current aspect ratio when resizing
+                    </p>
                   </div>
 
-                  {/* Preset Sizes */}
+                  {/* Base Size (for quick preset selection) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {cropMode === 'preset' ? 'Select Size' : 'Base Size'}
+                      Base Size
                     </label>
                     <div className="space-y-1.5">
                       {PRESET_SIZES.map((preset, index) => (
@@ -498,42 +432,65 @@ export function VideoCropping({ onBack, onEditAgain, preUploadedFiles }: VideoCr
               {/* Preview Panel */}
               <div className="lg:col-span-2">
                 <h3 className="text-base font-semibold mb-2">Preview</h3>
-                {cropMode === 'preset' ? (
-                  <VideoThumbnail
-                    src={uploadedVideo.blobUrl!}
-                    title={uploadedVideo.filename}
-                    maxHeight="350px"
-                  />
-                ) : (
-                  <Card className="overflow-hidden">
-                    <CardContent className="p-0 relative">
+                <Card className="overflow-hidden">
+                  <CardContent className="p-0 relative">
+                    <div
+                      ref={containerRef}
+                      className="relative bg-slate-200 rounded-lg overflow-hidden"
+                      style={{ width: '600px', height: '400px' }}
+                    >
+                      {/* Video preview */}
                       <video
                         ref={videoRef}
                         src={uploadedVideo.blobUrl!}
-                        className="hidden"
+                        className="absolute select-none"
+                        style={{
+                          left: videoDisplay.x,
+                          top: videoDisplay.y,
+                          width: videoDisplay.width,
+                          height: videoDisplay.height,
+                          objectFit: 'contain',
+                        }}
                         onLoadedMetadata={() => {
-                          // Trigger canvas redraw
                           if (videoRef.current) {
                             videoRef.current.currentTime = 1;
+                            setVideoLoaded(true);
                           }
                         }}
-                      />
-                      <div className="flex justify-center bg-gray-50">
-                        <canvas
-                          ref={canvasRef}
-                          onMouseDown={handleCanvasMouseDown}
-                          onMouseMove={handleCanvasMouseMove}
-                          onMouseUp={handleCanvasMouseUp}
-                          onMouseLeave={handleCanvasMouseUp}
-                          className="max-h-[350px] object-contain cursor-move"
+                      >
+                        <track kind="captions" />
+                      </video>
+
+                      {/* Crop Frame */}
+                      {videoLoaded && videoDisplay.width > 0 && (
+                        <CropFrame
+                          x={cropRect.x}
+                          y={cropRect.y}
+                          width={cropRect.width}
+                          height={cropRect.height}
+                          containerWidth={600}
+                          containerHeight={400}
+                          imageDisplay={videoDisplay}
+                          onFrameChange={handleCropFrameChange}
+                          aspectRatio={lockAspectRatio ? cropRect.width / cropRect.height : undefined}
+                          lockAspectRatio={lockAspectRatio}
+                          showDimensions={true}
+                          showAspectRatioHint={true}
+                          showPresetButtons={false}
+                          presetAspectRatios={[
+                            { label: '16:9', ratio: 16/9, width: 16, height: 9 },
+                            { label: '4:3', ratio: 4/3, width: 4, height: 3 },
+                            { label: '1:1', ratio: 1, width: 1, height: 1 },
+                            { label: '9:16', ratio: 9/16, width: 9, height: 16 },
+                          ]}
                         />
-                      </div>
-                      <p className="text-xs text-gray-500 p-2 text-center">
-                        Drag the highlighted area to adjust crop position
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 p-2 text-center">
+                      Drag to move • Drag handles to resize • Aspect ratio hints appear when resizing
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </motion.div>
           )}

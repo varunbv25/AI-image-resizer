@@ -13,6 +13,7 @@ interface DimensionSelectorProps {
   targetDimensions: ImageDimensions;
   onDimensionsChange: (dimensions: ImageDimensions) => void;
   showAIMessage?: boolean;
+  onManualModeChange?: (isManual: boolean) => void;
 }
 
 export function DimensionSelector({
@@ -20,6 +21,7 @@ export function DimensionSelector({
   targetDimensions,
   onDimensionsChange,
   showAIMessage = true,
+  onManualModeChange,
 }: DimensionSelectorProps) {
   const [selectedRatio, setSelectedRatio] = useState<string>('');
   const [customWidth, setCustomWidth] = useState(targetDimensions.width.toString());
@@ -42,13 +44,30 @@ export function DimensionSelector({
     setCustomWidth(newWidth.toString());
     setCustomHeight(newHeight.toString());
     onDimensionsChange({ width: newWidth, height: newHeight });
+
+    // Notify that we're in preset mode (not manual)
+    if (onManualModeChange) {
+      onManualModeChange(false);
+    }
   };
 
   const handleCustomDimensionChange = () => {
-    setSelectedRatio(''); // Clear preset selection when using custom
+    setSelectedRatio(''); // Clear preset selection when using manual
     const width = parseInt(customWidth) || targetDimensions.width;
     const height = parseInt(customHeight) || targetDimensions.height;
     onDimensionsChange({ width, height });
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+
+    // When switching to manual tab, notify parent to disable aspect ratio lock
+    if (value === 'manual' && onManualModeChange) {
+      onManualModeChange(true);
+      setSelectedRatio(''); // Clear any preset selection
+    } else if (value === 'presets' && onManualModeChange) {
+      onManualModeChange(false);
+    }
   };
 
   // Preset buttons with better names
@@ -70,7 +89,7 @@ export function DimensionSelector({
         </p>
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 bg-transparent gap-2 p-0">
             <TabsTrigger
               value="presets"
@@ -79,10 +98,10 @@ export function DimensionSelector({
               Presets
             </TabsTrigger>
             <TabsTrigger
-              value="custom"
+              value="manual"
               className="border-2 border-gray-300 data-[state=active]:bg-black data-[state=active]:text-white data-[state=active]:border-black"
             >
-              Custom
+              Manual
             </TabsTrigger>
           </TabsList>
 
@@ -111,10 +130,10 @@ export function DimensionSelector({
             </div>
           </TabsContent>
 
-          {/* Custom Tab */}
-          <TabsContent value="custom" className="space-y-4">
+          {/* Manual Tab */}
+          <TabsContent value="manual" className="space-y-4">
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">Custom Dimensions</h4>
+              <h4 className="text-sm font-medium">Manual Dimensions</h4>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-2 block">Width</label>
