@@ -523,7 +523,7 @@ function HomeContent() {
   // Render mode selection step
   const renderModeSelection = () => {
     // Define batch-capable modes (only these support multiple images/videos)
-    const batchCapableModes: Mode[] = ['compression', 'enhancement', 'rotate-flip', 'video-compression', 'video-trimming'];
+    const batchCapableModes: Mode[] = ['compression', 'enhancement', 'rotate-flip', 'video-compression', 'video-cropping', 'video-trimming'];
     const isBatchUpload = uploadedFiles.length > 1;
 
     // Define mode types

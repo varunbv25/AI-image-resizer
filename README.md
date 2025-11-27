@@ -8,9 +8,10 @@ A comprehensive, full-stack media processing platform offering **10 powerful pro
 - 🎨 **Modern UI**: Built with shadcn/ui components on Radix UI primitives + Tailwind CSS 4
 - ⚡ **Performance**: Sharp.js (libvips) for blazing-fast server-side image processing + ONNX Runtime for client-side ML
 - 🔄 **Chain Operations**: Seamlessly process images across all 5 modes with "Edit Again" feature
-- 📦 **Full Batch Processing**: Process multiple files simultaneously with **per-file settings customization**
+- 📦 **Unified Batch Processing**: Automatic batch mode detection with intelligent single/batch UI switching
 - 🎯 **Individual Selection**: Click any file to customize settings for that specific file
 - 🎯 **Unlimited File Sizes**: Vercel Blob integration bypasses 4.5MB serverless limits
+- 🏗️ **Clean Architecture**: Single component per mode with automatic batch detection (no separate batch components)
 
 ## 🌟 Features
 
@@ -96,10 +97,10 @@ A comprehensive, full-stack media processing platform offering **10 powerful pro
 
 #### 🎥 Video Compression
 - **Flexible Compression**: Reduce video file sizes while maintaining quality
-- **Target Size Control**: Set specific file size targets in MB
-- **Resolution Options**: 360p, 480p, 720p output resolutions (30 FPS)
+- **Target Size Control**: Set specific file size targets in MB or KB
+- **Resolution Options**: 240p, 360p, 480p, 720p output resolutions (30 FPS)
 - **Format Support**: MP4, WebM, MOV output formats (H.264 codec with AAC audio)
-- **Batch Processing**: Process multiple videos with sidebar UI
+- **Automatic Batch Detection**: Seamlessly switches between single and batch UI based on upload count
 - **Per-Video Settings**: Customize target size, resolution, and format for each video
 - **Individual Selection**: Click any video to apply unique compression settings
 - **Smart Quality Calculation**: Automatically calculates optimal bitrate for target size
@@ -111,28 +112,37 @@ A comprehensive, full-stack media processing platform offering **10 powerful pro
 #### ✂️ Video Trimming
 - **Precision Timeline Control**: Frame-by-frame video trimming interface
 - **Interactive Timeline**: Visual timeline with draggable start/end handles
-- **Frame Preview Strip**: See video frames along the timeline
+- **Frame Preview Strip**: See video frames along the timeline (0.5s intervals)
 - **Playback Control**: Play/pause video to find exact trim points
 - **Fine-Tuning Buttons**: Increment/decrement start/end times by 0.1 seconds
 - **Long Press Support**: Hold buttons for continuous time adjustment
-- **Batch Processing**: Trim multiple videos with individual settings
+- **Automatic Batch Detection**: Seamlessly switches between single and batch UI
 - **Per-Video Settings**: Set unique start and end times for each video
 - **Individual Selection**: Click any video to customize trim points
 - **Real-time Preview**: See exactly which portion will be kept
+- **Keyboard Navigation**: Arrow key support for timeline navigation
 - **Bulk Download**: Download all trimmed videos as a ZIP file
 
 #### 🎯 Video Cropping
-- **Coming Soon**: Advanced video cropping with aspect ratio presets
-- **Batch Processing**: Process multiple videos with individual crop settings
-- **Real-time Preview**: Visual crop area overlay
+- **Flexible Crop Controls**: Manual crop with drag-and-drop positioning
+- **Aspect Ratio Presets**: 16:9, 9:16, 4:3, 1:1, and custom dimensions
+- **Real-time Preview**: Visual crop area overlay with live dimensions
+- **Automatic Batch Detection**: Seamlessly switches between single and batch UI
+- **Per-Video Settings**: Customize crop dimensions and position for each video
+- **Individual Selection**: Click any video to apply unique crop settings
+- **Drag Positioning**: Click and drag to reposition video within crop frame
+- **Thumbnails**: Visual preview thumbnails for all uploaded videos
+- **Bulk Download**: Download all cropped videos as a ZIP file
 
 ### 🎯 Universal Features
 - **Drag & Drop Interface**: Intuitive file upload with comprehensive validation
 - **Progress Tracking**: Real-time processing status with detailed progress indicators
+- **Automatic Batch Mode**: Intelligent detection - uploads 2+ files automatically enable batch UI
+- **Unified Components**: Single component per mode handles both single and batch processing
 - **Individual File Selection**: Click any file in batch mode to customize its settings
 - **Per-File Configuration**: Each file can have unique processing parameters
 - **Batch Actions**: Process all files at once with default settings or customize each one
-- **Visual Sidebar**: Thumbnails, file info, and status indicators for all uploaded files
+- **Visual Sidebar**: Thumbnails, file info, and status indicators for all uploaded files (batch mode only)
 - **Unlimited File Sizes**: ⭐ **NEW** - Upload images of any size using Vercel Blob direct uploads
   - Bypasses 4.5MB serverless function limit
   - Direct client-to-blob uploads with progress tracking
@@ -175,6 +185,64 @@ A comprehensive, full-stack media processing platform offering **10 powerful pro
   - Arrow keys: Move crop frame
   - Space: Apply crop
   - Ctrl+R: Reset
+
+## 🏗️ Architecture & Design
+
+### Unified Component Architecture
+
+The application uses a **smart, unified component architecture** that eliminates code duplication:
+
+#### Design Pattern
+- **Single Component per Mode**: Each processing mode (compression, trimming, cropping) has ONE component
+- **Automatic Batch Detection**: Components detect batch mode via `preUploadedFiles.length > 1`
+- **Conditional UI Rendering**: Same component renders different UI based on batch mode
+- **Dual State Management**: Components maintain both single-file and batch-file state
+
+#### Example Implementation
+```typescript
+export function VideoCompression({ preUploadedFiles }: Props) {
+  // Automatic batch mode detection
+  const isBatchMode = preUploadedFiles && preUploadedFiles.length > 1;
+
+  // Batch state
+  const [videos, setVideos] = useState<BatchVideoItem[]>([]);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+
+  // Single mode state
+  const [uploadedVideo, setUploadedVideo] = useState<Video | null>(null);
+  const [processingStatus, setProcessingStatus] = useState({...});
+
+  // Conditional UI rendering
+  if (isBatchMode) {
+    return (
+      <div>
+        <Sidebar videos={videos} onSelect={setSelectedVideoId} />
+        <MainArea video={selectedVideo} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FullScreenPreview video={uploadedVideo} />
+    </div>
+  );
+}
+```
+
+#### Benefits Achieved
+- ✅ **Code Maintainability**: One component to maintain instead of two
+- ✅ **Reduced Duplication**: ~2,200+ lines of duplicate code eliminated
+- ✅ **Consistent Behavior**: Same logic for single and batch modes
+- ✅ **Better UX**: Seamless transition between single/batch modes
+- ✅ **Easier Testing**: Test one component instead of two
+- ✅ **Simplified Routing**: No conditional routing logic needed in page.tsx
+
+#### Components Using This Pattern
+- ✅ `VideoCompression.tsx` - Single + Batch compression
+- ✅ `VideoCropping.tsx` - Single + Batch cropping
+- ✅ `VideoTrimming.tsx` - Single + Batch trimming
+- 🔄 Image components follow similar patterns
 
 ## 🧮 Processing Algorithms
 
@@ -367,30 +435,43 @@ The application offers **10 distinct processing modes** (5 image + 5 video) acce
 7. **Video Trimming** - For precise video cutting and clip extraction
 8. **Video Cropping** - For aspect ratio adjustment (coming soon)
 
-### Batch Processing with Individual Customization
+### Automatic Batch Processing with Unified Components
 
-All processing modes support **full batch processing** with **per-file customization**:
+All processing modes use **intelligent batch detection** with **unified components**:
 
-1. **Upload Multiple Files**
-   - Drag and drop multiple files onto the upload area
-   - Or click to browse and select multiple files
-   - All files appear in the sidebar with thumbnails and status indicators
+#### How Batch Mode Works
 
-2. **Individual File Selection**
+1. **Upload Files**
+   - Upload 1 file → Single mode UI (full-screen preview, simple controls)
+   - Upload 2+ files → Batch mode UI (sidebar with thumbnails, multi-file controls)
+   - **No separate components** - same component automatically adapts!
+
+2. **Automatic UI Switching**
+   ```typescript
+   // Each component detects batch mode automatically
+   const isBatchMode = preUploadedFiles && preUploadedFiles.length > 1;
+
+   if (isBatchMode) {
+     return (<BatchUI />);  // Shows sidebar + file selector
+   }
+   return (<SingleUI />);   // Shows full-screen preview
+   ```
+
+3. **Individual File Selection** (Batch Mode)
    - Click any file in the sidebar to select it
    - The main content area displays settings for that specific file
    - Customize processing parameters for that file only
 
-3. **Settings Customization**
+4. **Settings Customization**
    - **Default Settings**: Apply to all files when using "Process All"
    - **Per-File Settings**: Click a file to customize its individual settings
    - Each file remembers its custom settings until processing
 
-4. **Processing Options**
+5. **Processing Options**
    - **Process Individual**: Click "Process This [Image/Video]" to process the selected file with its custom settings
-   - **Process All**: Click "Process All [Images/Videos]" to process all pending files (uses default settings for files without custom settings)
+   - **Process All**: Click "Process All [Images/Videos]" to process all pending files
 
-5. **Download Options**
+6. **Download Options**
    - **Download Single**: Click download button on individual completed files
    - **Download All**: Click "Download All" to get a ZIP file of all completed files
 
@@ -477,15 +558,22 @@ This project is private and proprietary. All rights reserved.
 - **Rotate & Flip** provides instant image transformations with batch processing support
 
 **Video Modes:**
-- **Video Compression**: Client-side FFmpeg.wasm processing, target size and resolution control
-- **Video Trimming**: Frame-accurate trimming with interactive timeline
-- **Video Cropping**: Coming soon
+- **Video Compression**: Client-side FFmpeg.wasm processing, target size and resolution control, automatic batch detection
+- **Video Trimming**: Frame-accurate trimming with interactive timeline, automatic batch detection
+- **Video Cropping**: Aspect ratio presets and manual positioning, automatic batch detection
 
-**Key Capabilities:**
-- **Full Batch Processing**: All modes support multiple file uploads
+**Key Architectural Improvements:**
+- **🏗️ Unified Components**: One component per mode (no separate batch components)
+- **🔍 Automatic Detection**: `isBatchMode = preUploadedFiles.length > 1` triggers batch UI
+- **🎯 Smart UI Switching**: Single component seamlessly adapts between single and batch modes
+- **📦 Reduced Code Duplication**: ~2,200+ lines of duplicate code eliminated
+- **✅ Easier Maintenance**: One component to test and maintain instead of two
+
+**Batch Processing Capabilities:**
+- **Automatic Batch Mode**: Upload 2+ files → batch UI with sidebar automatically appears
 - **Individual Customization**: Click any file to apply unique settings
 - **Per-File Settings**: Each file can have different processing parameters
-- **Visual Sidebar**: Thumbnails, status indicators, and file information
+- **Visual Sidebar**: Thumbnails, status indicators, and file information (batch mode only)
 - **Bulk Downloads**: ZIP files for batch-processed files
 
 **UI/UX Highlights:**

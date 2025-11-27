@@ -11,7 +11,6 @@ import { getVideoProcessor } from '@/lib/videoProcessor';
 import { Download, Check, Clock, AlertCircle, ArrowLeft, Scissors, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { VideoTrimSettings, VideoProcessingStatus } from '@/types';
-import { VideoTrimmingBatch } from './VideoTrimmingBatch';
 
 interface VideoTrimmingProps {
   onBack: () => void;
@@ -20,28 +19,7 @@ interface VideoTrimmingProps {
   onSwitchToBatch?: (files: File[]) => void;
 }
 
-export function VideoTrimming({ onBack, onEditAgain, preUploadedFiles }: VideoTrimmingProps) {
-  const [batchFiles, setBatchFiles] = useState<File[] | undefined>(preUploadedFiles);
-
-  // Check if we should use batch mode
-  const isBatchMode = batchFiles && batchFiles.length > 1;
-
-  // If batch mode, render batch component
-  if (isBatchMode) {
-    return <VideoTrimmingBatch onBack={onBack} preUploadedFiles={batchFiles} />;
-  }
-
-  return (
-    <VideoTrimmingSingle
-      onBack={onBack}
-      onEditAgain={onEditAgain}
-      preUploadedFiles={batchFiles && batchFiles.length === 1 ? batchFiles : undefined}
-      onSwitchToBatch={setBatchFiles}
-    />
-  );
-}
-
-function VideoTrimmingSingle({ onBack, onEditAgain, preUploadedFiles, onSwitchToBatch }: VideoTrimmingProps) {
+export function VideoTrimming({ onBack, onEditAgain, preUploadedFiles, onSwitchToBatch }: VideoTrimmingProps) {
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -813,7 +791,7 @@ function VideoTrimmingSingle({ onBack, onEditAgain, preUploadedFiles, onSwitchTo
                         <span>Progress</span>
                         <span>{processingStatus.progress}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                         <div
                           className="bg-gradient-to-r from-teal-600 to-cyan-600 h-3 rounded-full transition-all duration-300"
                           style={{ width: `${processingStatus.progress}%` }}
